@@ -1,15 +1,22 @@
 package api
 
 import (
+	"context"
 	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jsndz/signalbus/kafka"
 )
 
 type TestingRequset struct{
 	Name string `json:"name"`
 }
+type SignupRequest struct {
+	Username string `json:"username" binding:"required,min=3"`
+	Password string `json:"password" binding:"required"`
+}
+
 
 func Testing(c *gin.Context){
 	var req TestingRequset
@@ -26,3 +33,31 @@ func Testing(c *gin.Context){
 		"message":"Accepted",
 	})
 }
+
+
+func Signup(producer *kafka.Producer) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req SignupRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": "Invalid request",
+				"err":     err.Error(),
+			})
+			return
+		}
+
+		err := producer.WriteToKafka(context.Background(), req.Username, req.Password)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": "Failed to send Kafka message",
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusAccepted, gin.H{
+			"message": "Signup event sent to Kafka",
+		})
+	}
+}
+
