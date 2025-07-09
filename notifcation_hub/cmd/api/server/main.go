@@ -9,7 +9,7 @@ import (
 	"syscall"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jsndz/signalbus/cmd/api"
+	api "github.com/jsndz/signalbus/cmd/api/internal"
 	"github.com/jsndz/signalbus/kafka"
 )
 
