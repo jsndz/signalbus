@@ -10,17 +10,18 @@ import (
 )
 
 func main(){
-	router:= *gin.Default()
+	router:= gin.Default()
 	c:=kafka.NewConsumer("user_signup", []string{"localhost:9092"})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	defer c.Close() 
 	go func(){
 		for{
 			m,err:=c.ReadFromKafka(ctx)
 			if err!=nil{
 				log.Print(err)
 			}
-			log.Println(m.Key,m.Value)
+			log.Println(string(m.Key),string(m.Value))
 		}
 	}()
 

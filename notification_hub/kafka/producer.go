@@ -13,10 +13,10 @@ type Producer struct{
 
 
 
-func NewProducer(brokers string,topic string) *Producer{
+func NewProducer(brokers []string,topic string) *Producer{
 	return &Producer{
 		&kafka.Writer{
-			Addr:     kafka.TCP("localhost:9092", "localhost:9093", "localhost:9094"),
+			Addr:     kafka.TCP(brokers...),
 			Topic:   topic,
 			Balancer: &kafka.LeastBytes{},
 		},
@@ -25,14 +25,14 @@ func NewProducer(brokers string,topic string) *Producer{
 }
 
 func(p Producer) WriteToKafka(ctx context.Context, key ,value string) error{
-	err := p.writer.WriteMessages(context.Background(),
+	err := p.writer.WriteMessages(ctx,
 		kafka.Message{
 			Key:   []byte(key),
 			Value: []byte(value),
 		},
 	)
 	if err != nil {
-		log.Fatal("failed to write messages:", err)
+		log.Printf("failed to write messages: %v", err)
 		return err
 	}
 	return nil
