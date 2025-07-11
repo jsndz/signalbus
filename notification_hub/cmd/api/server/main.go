@@ -10,15 +10,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 	api "github.com/jsndz/signalbus/cmd/api/internal"
-	"github.com/jsndz/signalbus/kafka"
+	"github.com/jsndz/signalbus/pkg/kafka"
+	"github.com/jsndz/signalbus/pkg/utils"
 )
 
 func main() {
+  broker:= utils.GetEnv("KAFKA_BROKER")
+
   router := gin.Default()
   router.GET("/health",func(ctx *gin.Context) {
      ctx.JSON(http.StatusAccepted,gin.H{"message":"ok"})
   })
-  producer:=kafka.NewProducer([]string{"localhost:9092"}, "user_signup")
+  producer:=kafka.NewProducer([]string{broker}, "user_signup")
 
   v1:=router.Group("/api")
   go func ()  {

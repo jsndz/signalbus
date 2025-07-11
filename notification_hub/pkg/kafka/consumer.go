@@ -24,8 +24,10 @@ func NewConsumer (topic string,brokers []string) *Consumer{
 
 func (c *Consumer ) ReadFromKafka(ctx context.Context)(*kafka.Message,error) {
 	m, err := c.reader.ReadMessage(ctx)
-	return &m,err
-	
+	if err != nil{
+		return nil, err
+	}
+	return &m,nil
 }
 
 func (c *Consumer) Close() error {

@@ -1,0 +1,20 @@
+FROM golang:1.24-alpine AS builder
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+
+RUN go mod download
+
+COPY . .
+
+WORKDIR /app/cmd/email_worker
+
+RUN go build -o /email_service 
+
+FROM alpine:latest
+COPY --from=builder /email_service /email_service
+
+EXPOSE 3000
+
+CMD ["/email_service"]

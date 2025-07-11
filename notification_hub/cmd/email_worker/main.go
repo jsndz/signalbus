@@ -6,13 +6,18 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jsndz/signalbus/kafka"
+	"github.com/jsndz/signalbus/cmd/email_worker/service"
+	"github.com/jsndz/signalbus/pkg/kafka"
+	"github.com/jsndz/signalbus/pkg/utils"
 )
 
 func main(){
 	router:= gin.Default()
-	c:=kafka.NewConsumer("user_signup", []string{"localhost:9092"})
+	broker:= utils.GetEnv("KAFKA_BROKER")
+	log.Println(broker)
+	c:=kafka.NewConsumer("user_signup", []string{broker})
 	ctx, cancel := context.WithCancel(context.Background())
+	mailService:= service.NewMailClient()
 	defer cancel()
 	defer c.Close() 
 	go func(){
@@ -21,7 +26,7 @@ func main(){
 			if err!=nil{
 				log.Print(err)
 			}
-			log.Println(string(m.Key),string(m.Value))
+			mailService.SendMail(string(m.Key), string(m.Value))
 		}
 	}()
 

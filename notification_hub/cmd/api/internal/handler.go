@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jsndz/signalbus/kafka"
+	"github.com/jsndz/signalbus/pkg/kafka"
 )
 
 type TestingRequset struct{
@@ -14,6 +14,7 @@ type TestingRequset struct{
 }
 type SignupRequest struct {
 	Username string `json:"username" binding:"required,min=3"`
+	Email string `json:"email" binding:"required"`
 	Password string `json:"password" binding:"required"`
 }
 
@@ -46,7 +47,7 @@ func Signup(producer *kafka.Producer) gin.HandlerFunc {
 			return
 		}
 
-		err := producer.WriteToKafka(context.Background(), req.Username, req.Password)
+		err := producer.WriteToKafka(context.Background(), req.Username, req.Email)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": "Failed to send Kafka message",
