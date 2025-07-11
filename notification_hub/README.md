@@ -14,6 +14,7 @@ See logs:
 
 - docker compose logs -f api
 - docker compose logs -f email
+- docker compose logs -f sms
 
 Running API and Worker Separately (Manual Build):
 
@@ -21,7 +22,10 @@ Running API and Worker Separately (Manual Build):
 - docker run -p 8080:8080 notification_hub:latest
 
 - docker build -f deployments/Dockerfile.email -t email:latest .
-- docker run -p 3000:3000 email:latest
+- docker run -p 3001:3001 email:latest
+
+- docker build -f deployments/Dockerfile.sms -t sms:latest .
+- docker run -p 3000:3000 sms:latest
 
 Stop everything:
 
@@ -44,8 +48,18 @@ Response Example:
 }
 ```
 
-Log:
+Logs:
 
 ```md
 email-1 | 2025/07/10 09:54:26 jsn qwerty
+sms-1 | 2025/07/11 14:52:38 SMS sent to +91XXXXXXXXXX! Message SID: SMfXXXXXXXXXXXXXXXXXXXXXXXXXXX
+email-1 | 202
 ```
+
+Topics Learned:
+
+- Docker compose
+- Twilio and Sendgrid Integration
+- Kafka Producer and Consumer
+- Kafka Retry Logics
+- makefile

@@ -21,7 +21,7 @@ func main() {
   router.GET("/health",func(ctx *gin.Context) {
      ctx.JSON(http.StatusAccepted,gin.H{"message":"ok"})
   })
-  producer:=kafka.NewProducer([]string{broker}, "user_signup")
+  producer := kafka.NewProducer([]string{broker})
 
   v1:=router.Group("/api")
   go func ()  {

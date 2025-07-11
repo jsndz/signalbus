@@ -8,4 +8,5 @@ import (
 func Notify(router *gin.RouterGroup,p *kafka.Producer ){
 	router.POST("/test",Testing)
 	router.POST("/signup",Signup(p))
+	router.POST("/payment_success",PaymentSuccess(p))
 }
