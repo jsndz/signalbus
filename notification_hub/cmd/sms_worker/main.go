@@ -7,7 +7,7 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jsndz/signalbus/cmd/email_worker/service"
+	"github.com/jsndz/signalbus/cmd/sms_worker/service"
 	"github.com/jsndz/signalbus/pkg/kafka"
 	"github.com/jsndz/signalbus/pkg/utils"
 )
@@ -19,14 +19,13 @@ type SignupRequest struct {
 	Phone string `json:"phone" binding:"required"`
 }
 
-
 func main(){
 	router:= gin.Default()
 	broker:= utils.GetEnv("KAFKA_BROKER")
 	log.Println(broker)
 	c:=kafka.NewConsumer("user_signup", []string{broker})
 	ctx, cancel := context.WithCancel(context.Background())
-	mailService:= service.NewMailClient()
+	smsService:= service.NewSMSClient()
 	defer cancel()
 	defer c.Close() 
 	go func(){
@@ -40,11 +39,11 @@ func main(){
 			if err!=nil{
 				log.Println("COuldn't Parse JSON")
 			}
-			mailService.SendMail(messageBody.Username, messageBody.Email)
+			smsService.SendSMS(messageBody.Phone)
 		}
 	}()
 
-	if err:= router.Run(":3001");err !=nil{
+	if err:= router.Run(":3000");err !=nil{
 		fmt.Printf("Failed to start server: %v\n", err)
 	}
 }

@@ -31,6 +31,18 @@ services:
       context: .
       dockerfile: deployments/Dockerfile.email
     ports:
+      - "3001:3001"
+    environment:
+      - KAFKA_BROKER=kafka:9092
+    env_file:
+      - ".env"
+    depends_on:
+      - kafka
+  sms:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile.sms
+    ports:
       - "3000:3000"
     environment:
       - KAFKA_BROKER=kafka:9092

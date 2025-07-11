@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 
@@ -16,6 +17,7 @@ type SignupRequest struct {
 	Username string `json:"username" binding:"required,min=3"`
 	Email string `json:"email" binding:"required"`
 	Password string `json:"password" binding:"required"`
+	Phone string `json:"phone" binding:"required"`
 }
 
 
@@ -46,8 +48,9 @@ func Signup(producer *kafka.Producer) gin.HandlerFunc {
 			})
 			return
 		}
+		messageBody,err := json.Marshal(req)
 
-		err := producer.WriteToKafka(context.Background(), req.Username, req.Email)
+		err = producer.WriteToKafka(context.Background(), []byte(req.Email), (messageBody))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": "Failed to send Kafka message",

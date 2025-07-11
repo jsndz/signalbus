@@ -24,11 +24,11 @@ func NewProducer(brokers []string,topic string) *Producer{
 	
 }
 
-func(p Producer) WriteToKafka(ctx context.Context, key ,value string) error{
+func(p Producer) WriteToKafka(ctx context.Context, key ,value []byte) error{
 	err := p.writer.WriteMessages(ctx,
 		kafka.Message{
-			Key:   []byte(key),
-			Value: []byte(value),
+			Key:   key,
+			Value: value,
 		},
 	)
 	if err != nil {
