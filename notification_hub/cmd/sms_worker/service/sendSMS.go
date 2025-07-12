@@ -2,7 +2,6 @@ package service
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/jsndz/signalbus/metrics"
@@ -10,69 +9,97 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/twilio/twilio-go"
 	api "github.com/twilio/twilio-go/rest/api/v2010"
+	"go.uber.org/zap"
 )
+
 const maxRetries = 3
 
 type SMSClient struct {
 	FromNumber string
-	Client *twilio.RestClient
+	Client     *twilio.RestClient
+	Logger     *zap.Logger
 }
 
-func NewSMSClient() *SMSClient {
+func NewSMSClient(logger *zap.Logger) *SMSClient {
 	accountSid := utils.GetEnv("TWILIO_ACCOUNT_SID")
 	authToken := utils.GetEnv("TWILIO_AUTH_TOKEN")
-	fromNumber := utils.GetEnv("TWILIO_PHONE_NUMBER") 
-	client:= twilio.NewRestClientWithParams(
+	fromNumber := utils.GetEnv("TWILIO_PHONE_NUMBER")
+
+	client := twilio.NewRestClientWithParams(
 		twilio.ClientParams{
 			Username: accountSid,
 			Password: authToken,
 		})
+
 	return &SMSClient{
 		FromNumber: fromNumber,
-		Client: client,
-		
+		Client:     client,
+		Logger:     logger,
 	}
 }
 
-
-
 func (c *SMSClient) SendSMS(toNumber string) error {
+	body := "Welcome to SignalBus"
+	c.Logger.Info("Sending SMS",
+		zap.String("to", toNumber),
+		zap.String("body", body),
+	)
+
 	params := &api.CreateMessageParams{}
-	body:= "Welcome to SignalBus"
 	params.SetBody(body)
 	params.SetFrom(c.FromNumber)
 	params.SetTo(toNumber)
 
 	resp, err := c.Client.Api.CreateMessage(params)
 	if err != nil {
-		log.Println(err.Error())
+		c.Logger.Error("Twilio API error while sending SMS",
+			zap.String("to", toNumber),
+			zap.Error(err),
+		)
+		metrics.ExternalAPIFailure.WithLabelValues("twilio", "sms_worker").Inc()
 		return err
 	}
+
 	if resp.Sid != nil {
-		log.Printf(" SMS sent to %s! Message SID: %s\n", toNumber, *resp.Sid)	
-		metrics.ExternalAPISuccess.WithLabelValues("twilio","sms_worker").Inc()
+		c.Logger.Info("SMS sent successfully",
+			zap.String("to", toNumber),
+			zap.String("sid", *resp.Sid),
+		)
+		metrics.ExternalAPISuccess.WithLabelValues("twilio", "sms_worker").Inc()
 	} else {
-		log.Println(resp.Body)
-		metrics.ExternalAPIFailure.WithLabelValues("twilio","sms_worker").Inc()
+		c.Logger.Error("SMS send failed: no SID returned",
+			zap.String("to", toNumber),
+		)
+		metrics.ExternalAPIFailure.WithLabelValues("twilio", "sms_worker").Inc()
 	}
 	return nil
 }
 
-
-func(c *SMSClient) SendSMSWithRetry(toNumber string ) error{
+func (c *SMSClient) SendSMSWithRetry(toNumber string) error {
 	timer := prometheus.NewTimer(metrics.NotificationSendDuration.WithLabelValues("twilio", "sms_worker"))
 	defer timer.ObserveDuration()
-	for attempt:=1; attempt<=maxRetries;attempt++{
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
 		err := c.SendSMS(toNumber)
 		if err == nil {
-			return nil 
+			return nil
 		}
-		log.Printf("Send attempt %d failed: %v", attempt, err)
+
 		waitTime := time.Duration(attempt*2) * time.Second
-		log.Printf("Retrying in %v...", waitTime)
+		c.Logger.Warn("SMS send attempt failed, will retry",
+			zap.String("to", toNumber),
+			zap.Int("attempt", attempt),
+			zap.Error(err),
+			zap.Duration("retry_in", waitTime),
+		)
+
 		time.Sleep(waitTime)
 	}
-	err := fmt.Errorf("failed to send SMS")
-	log.Printf("SendMail failed after %d retries: %v", maxRetries, err)
-	return err
+
+	finalErr := fmt.Errorf("failed to send SMS after %d retries", maxRetries)
+	c.Logger.Error("Final SMS send failure",
+		zap.String("to", toNumber),
+		zap.Error(finalErr),
+	)
+	return finalErr
 }
