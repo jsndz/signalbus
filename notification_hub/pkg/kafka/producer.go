@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 
+	"github.com/jsndz/signalbus/metrics"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -23,7 +24,7 @@ func NewProducer(brokers []string) *Producer{
 	
 }
 
-func(p Producer) Publish(ctx context.Context,topic string, key ,value []byte) error{
+func(p *Producer) Publish(ctx context.Context,topic string, key ,value []byte) error{
 	err := p.writer.WriteMessages(ctx,
 		kafka.Message{
 			Topic: topic,
@@ -33,8 +34,10 @@ func(p Producer) Publish(ctx context.Context,topic string, key ,value []byte) er
 	)
 	if err != nil {
 		log.Printf("failed to write messages: %v", err)
+		metrics.KafkaPublisherFailure.WithLabelValues(topic).Inc()
 		return err
 	}
+	metrics.KafkaPublisherSuccess.WithLabelValues(topic).Inc()
 	return nil
 	
 }

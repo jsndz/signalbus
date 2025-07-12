@@ -5,7 +5,9 @@ import (
 	"log"
 	"time"
 
+	"github.com/jsndz/signalbus/metrics"
 	"github.com/jsndz/signalbus/pkg/utils"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sendgrid/sendgrid-go"
 	"github.com/sendgrid/sendgrid-go/helpers/mail"
 )
@@ -32,8 +34,8 @@ func NewMailClient() *MailClient {
 	}
 }
 
-
 func(m *MailClient) SendMail(emailReq SendEmailRequest) error{
+	
 	from := mail.NewEmail("SignalBus", m.FromMail)
 	to := mail.NewEmail(emailReq.ToName, emailReq.ToEmail)
 	message := mail.NewSingleEmail(
@@ -43,20 +45,20 @@ func(m *MailClient) SendMail(emailReq SendEmailRequest) error{
 		emailReq.PlainText,
 		emailReq.HTMLBody,
 	)
-	response, err := m.Client.Send(message)
+	_, err := m.Client.Send(message)
 	if err != nil {
 		log.Printf("SendGrid error: %v", err)
+		metrics.ExternalAPIFailure.WithLabelValues("sendgrid","email_worker").Inc()
 		return err
 	} else {
-		fmt.Println(response.StatusCode)
-		fmt.Println(response.Body)
-		fmt.Println(response.Headers)
+		metrics.ExternalAPISuccess.WithLabelValues("sendgrid","email_worker").Inc()
 	}
 	return nil
 }
 
 func(m *MailClient) SendMailWithRetry(emailReq SendEmailRequest) error{
-
+	timer := prometheus.NewTimer(metrics.NotificationSendDuration.WithLabelValues("sendgrid", "email_worker"))
+	defer timer.ObserveDuration()
 	for attempt:=1; attempt<=maxRetries;attempt++{
 		err := m.SendMail(emailReq)
 		if err == nil {

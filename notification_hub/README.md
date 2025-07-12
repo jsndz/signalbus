@@ -63,3 +63,7 @@ Topics Learned:
 - Kafka Producer and Consumer
 - Kafka Retry Logics
 - makefile
+
+## Resources:
+
+- [Logs vs Metrics](https://betterstack.com/community/guides/observability/logging-metrics-tracing/)

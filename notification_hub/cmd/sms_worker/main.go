@@ -5,11 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jsndz/signalbus/cmd/sms_worker/service"
+	"github.com/jsndz/signalbus/metrics"
+	"github.com/jsndz/signalbus/middlewares"
 	"github.com/jsndz/signalbus/pkg/kafka"
 	"github.com/jsndz/signalbus/pkg/utils"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type SignupRequest struct {
@@ -21,6 +25,12 @@ type SignupRequest struct {
 
 func main(){
 	router:= gin.Default()
+	metrics.InitSMSMetrics()
+	router.Use(middlewares.MetricsMiddleware())
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	router.GET("/health",func(ctx *gin.Context) {
+		ctx.JSON(http.StatusAccepted,gin.H{"message":"ok"})
+	 })
 	broker:= utils.GetEnv("KAFKA_BROKER")
 	log.Println(broker)
 	c:=kafka.NewConsumer("user_signup", []string{broker})

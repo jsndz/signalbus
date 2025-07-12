@@ -26,10 +26,8 @@ type SuccessRequest struct {
 
 
 func SignupConsumer(broker string,ctx context.Context,mailService *service.MailClient){
-	
 	c:=kafka.NewConsumer("user_signup", []string{broker})
 	defer c.Close()
-
 	for{
 		select{
 		case <-ctx.Done():
@@ -43,7 +41,7 @@ func SignupConsumer(broker string,ctx context.Context,mailService *service.MailC
 		var	messageBody SignupRequest
 		err = json.Unmarshal(m.Value, &messageBody)
 		if err!=nil{
-			log.Println("COuldn't Parse JSON")
+			log.Println("Couldn't Parse JSON")
 		}
 		mailService.SendMailWithRetry(service.SendEmailRequest{
 			ToName:    messageBody.Username,
@@ -58,7 +56,7 @@ func SignupConsumer(broker string,ctx context.Context,mailService *service.MailC
 
 func PaymentSuccessConsumer(broker string,ctx context.Context,mailService *service.MailClient){
 	
-	c:=kafka.NewConsumer("payment_success", []string{broker})
+	c:=kafka.NewConsumer("payment_success",[]string{broker})
 	defer c.Close()
 
 	for{
@@ -67,7 +65,7 @@ func PaymentSuccessConsumer(broker string,ctx context.Context,mailService *servi
 			log.Println("COnsumer is shutting down")
 			return
 		default:
-			m,err:=c.ReadFromKafka(ctx)
+			m,err:=c.ReadFromKafka( ctx)
 			if err!=nil{
 				log.Print(err)
 			}

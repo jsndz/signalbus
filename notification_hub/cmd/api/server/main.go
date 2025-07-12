@@ -10,19 +10,24 @@ import (
 
 	"github.com/gin-gonic/gin"
 	api "github.com/jsndz/signalbus/cmd/api/internal"
+	"github.com/jsndz/signalbus/metrics"
+	"github.com/jsndz/signalbus/middlewares"
+
 	"github.com/jsndz/signalbus/pkg/kafka"
 	"github.com/jsndz/signalbus/pkg/utils"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
   broker:= utils.GetEnv("KAFKA_BROKER")
-
+  metrics.InitAPIMetrics()
   router := gin.Default()
+  router.Use(middlewares.MetricsMiddleware())
   router.GET("/health",func(ctx *gin.Context) {
      ctx.JSON(http.StatusAccepted,gin.H{"message":"ok"})
   })
   producer := kafka.NewProducer([]string{broker})
-
+  router.GET("/metrics", gin.WrapH(promhttp.Handler()))
   v1:=router.Group("/api")
   go func ()  {
     quit:= make(chan os.Signal, 1)
