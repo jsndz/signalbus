@@ -10,7 +10,7 @@ COPY . .
 
 WORKDIR /app/cmd/sms_worker
 
-RUN go build -o /sms_service 
+RUN go build -o /sms_service main.go
 
 FROM alpine:latest
 COPY --from=builder /sms_service /sms_service

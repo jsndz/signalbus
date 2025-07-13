@@ -10,7 +10,7 @@ COPY . .
 
 WORKDIR /app/cmd/api/server
 
-RUN go build -o /api_server 
+RUN go build -o /api_server main.go
 
 FROM alpine:latest
 COPY --from=builder /api_server /api_server
