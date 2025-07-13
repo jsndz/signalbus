@@ -63,6 +63,8 @@ Topics Learned:
 - Kafka Producer and Consumer
 - Kafka Retry Logics
 - makefile
+- Grafana + prometheus
+- logging with zap
 
 ## Resources:
 
