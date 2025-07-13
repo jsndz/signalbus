@@ -10,10 +10,10 @@ COPY . .
 
 WORKDIR /app/cmd/email_worker
 
-RUN go build -o /email_service main.go
+RUN go build -o /app/email_service main.go
 
 FROM alpine:latest
-COPY --from=builder /email_service /email_service
+COPY --from=builder /app/email_service /email_service
 
 EXPOSE 3001
 
