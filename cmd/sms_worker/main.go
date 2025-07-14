@@ -47,7 +47,7 @@ func main() {
 	})
 
 	topic := "user_signup"
-	consumer := kafka.NewConsumer(topic, []string{broker})
+	consumer := kafka.NewConsumerFromEnv(topic,"sms")
 	defer consumer.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())

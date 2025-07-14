@@ -1,0 +1,44 @@
+name: CI/CD to Railway
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    name: Build, Test, Dockerize, and Deploy to Railway
+    runs-on: ubuntu-latest
+
+    env:
+      GO111MODULE: on
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.21"
+
+      - name: Download Go Modules
+        run: go mod download
+
+      - name: Build API Service
+        run: go build -v ./cmd/api/server
+
+      - name: Build Email Worker
+        run: go build -v ./cmd/email_worker
+
+      - name: Build SMS Worker
+        run: go build -v ./cmd/sms_worker
+
+      - name: Run Unit Tests
+        run: go test ./... -v -cover
+
+      - name: Build Docker images
+        run: |
+          docker build -t myapp-api -f deployments/Dockerfile.api .
+          docker build -t myapp-email -f deployments/Dockerfile.email .
+          docker build -t myapp-sms -f deployments/Dockerfile.sms .

@@ -7,10 +7,13 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -o /app/email_service ./cmd/email_worker
+
+RUN go build -o /email_service ./cmd/email_worker
 
 FROM alpine:latest
-COPY --from=builder /app/email_service /email_service
+
+
+COPY --from=builder /email_service /email_service
 
 EXPOSE 3001
 CMD ["/email_service"]

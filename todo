@@ -1,0 +1,86 @@
+## 🔰 **Phase 1: Go, REST APIs & Docker (Days 1–5)**
+
+- [x] Create a basic Go REST API with `/health` and `/notify/test` routes
+- [x] Parse POST request JSON and print the result in the terminal
+- [x] Write a Dockerfile for the service (`FROM golang`, `COPY`, `RUN go build`)
+- [x] Build and run the service with Docker (`docker build`, `docker run`)
+- [x] Push your code to a public or private GitHub repo
+
+---
+
+## 🟡 **Phase 2: Kafka and First Microservice (Days 6–12)**
+
+- [x] Create a Docker Compose file with Kafka + Zookeeper
+- [x] Update your Notification API:
+
+  - [x] Add `/notify/signup` endpoint → Publish event to Kafka topic `user_signup`
+
+- [x] Create your second Go service → **Email Worker**
+
+  - [x] Subscribe to `user_signup` topic → Print `"Sending Welcome Email to <user>"` on message receipt
+
+- [x] Manually test: Call `/notify/signup`, verify Email Worker prints the message
+
+---
+
+## 🟠 **Phase 3: Integrate Real Email/SMS APIs (Days 13–20)**
+
+- [x] Replace the print statement with actual Mailgun API call to send welcome email
+
+- [x] Create a **SMS Worker** microservice:
+
+  - [x] Subscribe to `user_signup` topic
+  - [x] Send SMS via Twilio API
+
+- [x] Add `/notify/payment_success` to Notification API → Publish to `payment_success` topic
+- [x] Test end-to-end:
+
+  - [x] API → Kafka → Email Worker (Mailgun email sent)
+  - [x] API → Kafka → SMS Worker (Twilio SMS sent)
+
+- [x] Run all services + Kafka using `docker-compose up`
+
+---
+
+## 🟢 **Phase 4: Observability & Logging (Days 21–26)**
+
+- [x] Add a `/metrics` endpoint to Notification API and workers (export Go metrics)
+- [x] Setup Prometheus to scrape all your services
+- [x] Add a Grafana container → create dashboards showing:
+
+  - Number of notifications sent
+  - HTTP request duration
+  - Kafka message consumption rates
+
+- [x] Add structured logging to both API & workers:
+
+  - [x] Log request body, errors, and successful sends
+
+- [] (Optional) Store notification logs in **PostgreSQL**
+
+---
+
+## 🟧 **Phase 5: CI/CD + Cloud Deployment (Days 27–35)**
+
+- [x] Create a Railway project
+- [x] Deploy Notification API → Railway
+- [x] Deploy Email Worker & SMS Worker → Railway
+- [x] Migrate Kafka to Railway's managed add-on or use **Upstash Kafka**
+- [x] Create `.env` or Railway environment variables for Mailgun/Twilio API keys
+- [x] Write a **GitHub Actions workflow**:
+
+  - [x] On `main` branch push → Build Docker image → Deploy to Railway
+  - [x] Run Go unit tests in CI before deploying
+
+- [x] Test cloud setup end-to-end: API call from Postman triggers real email/SMS via Railway-deployed services
+
+---
+
+## 🔵 **Phase 6: Advanced Features (Optional)**
+
+- [ ] Add a **Dashboard Worker** to consume events and save them in Postgres
+- [ ] Build a simple frontend (React/Next.js) to display notification logs
+- [ ] Add dead-letter queue topic & logic for failed notifications
+- [ ] Add push notification support using Firebase Cloud Messaging
+- [ ] Scale Kafka consumers by running multiple worker replicas in Docker Compose
+- [ ] (Optional) Add tracing across services using OpenTelemetry & Jaeger

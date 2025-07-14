@@ -2,38 +2,86 @@ package kafka
 
 import (
 	"context"
+	"crypto/tls"
+	"log"
+	"time"
 
 	"github.com/jsndz/signalbus/metrics"
+	"github.com/jsndz/signalbus/pkg/utils"
 	"github.com/segmentio/kafka-go"
 )
 
-type Consumer struct{
+type Consumer struct {
 	reader *kafka.Reader
 }
 
-func NewConsumer (topic string,brokers []string) *Consumer{
+func (c *Consumer) ReadFromKafka(ctx context.Context) (*kafka.Message, error) {
+	m, err := c.reader.ReadMessage(ctx)
+	if err != nil {
+		metrics.KafkaSubscriberFailure.WithLabelValues(c.reader.Config().Topic).Inc()
+		return nil, err
+	}
+	metrics.KafkaSubscriberSuccess.WithLabelValues(c.reader.Config().Topic).Inc()
+	return &m, nil
+}
+
+func (c *Consumer) Close() error {
+	return c.reader.Close()
+}
+
+func NewConsumer(topic string, brokers []string, groupID string) *Consumer {
 	return &Consumer{
-		kafka.NewReader(kafka.ReaderConfig{
-			Brokers:   brokers,
-			Topic:     topic,
-			Partition: 0,
-			MaxBytes:  10e6, // 10MB
+		reader: kafka.NewReader(kafka.ReaderConfig{
+			Brokers: brokers,
+			Topic:   topic,
+			GroupID: groupID,
+			MaxBytes: 10e6, // 10MB
 		}),
 	}
 }
 
+func NewConsumerAvien(topic, groupID string) *Consumer {
+	kafkaURL := utils.GetEnv("AVIEN_KAFKA_URL")
 
-func (c *Consumer ) ReadFromKafka(ctx context.Context)(*kafka.Message,error) {
-	m, err := c.reader.ReadMessage(ctx)
-	if err != nil{
-		metrics.KafkaSubscriberFailure.WithLabelValues(c.reader.Config().Topic).Inc()
+	keypair, caCertPool :=utils.Decode()
 
-		return nil, err
+    dialer := &kafka.Dialer{
+        Timeout:   10 * time.Second,
+        DualStack: true,
+        TLS: &tls.Config{
+            Certificates: []tls.Certificate{keypair},
+            RootCAs:      caCertPool,
+        },
+    }
+
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers: []string{kafkaURL},
+		Topic:   topic,
+		GroupID: groupID,
+		Dialer:  dialer,
+		MaxBytes: 10e6,
+	})
+
+	return &Consumer{
+		reader: reader,
 	}
-	metrics.KafkaSubscriberSuccess.WithLabelValues(c.reader.Config().Topic).Inc()
-	return &m,nil
 }
 
-func (c *Consumer) Close() error {
-    return c.reader.Close()
+
+
+func NewConsumerFromEnv(topic,groupID string) *Consumer {
+	state := utils.GetEnv("STATE")
+	
+
+	switch state {
+	case "prod":
+		log.Println("Starting Kafka Consumer in PROD mode (Aiven)")
+		return NewConsumerAvien(topic, groupID)
+	case "dev":
+		log.Println("Starting Kafka Consumer in DEV mode (local)")
+		fallthrough
+	default:
+		broker := utils.GetEnv("KAFKA_BROKER")
+		return NewConsumer(topic, []string{broker}, groupID)
+	}
 }
