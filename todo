@@ -1,4 +1,6 @@
-## 🔰 **Phase 1: Go, REST APIs & Docker (Days 1–5)**
+Version 1:
+
+## **Phase 1: Go, REST APIs & Docker (Days 1–5)**
 
 - [x] Create a basic Go REST API with `/health` and `/notify/test` routes
 - [x] Parse POST request JSON and print the result in the terminal
@@ -8,7 +10,7 @@
 
 ---
 
-## 🟡 **Phase 2: Kafka and First Microservice (Days 6–12)**
+## **Phase 2: Kafka and First Microservice (Days 6–12)**
 
 - [x] Create a Docker Compose file with Kafka + Zookeeper
 - [x] Update your Notification API:
@@ -23,7 +25,7 @@
 
 ---
 
-## 🟠 **Phase 3: Integrate Real Email/SMS APIs (Days 13–20)**
+## **Phase 3: Integrate Real Email/SMS APIs (Days 13–20)**
 
 - [x] Replace the print statement with actual Mailgun API call to send welcome email
 
@@ -42,7 +44,7 @@
 
 ---
 
-## 🟢 **Phase 4: Observability & Logging (Days 21–26)**
+## **Phase 4: Observability & Logging (Days 21–26)**
 
 - [x] Add a `/metrics` endpoint to Notification API and workers (export Go metrics)
 - [x] Setup Prometheus to scrape all your services
@@ -60,7 +62,7 @@
 
 ---
 
-## 🟧 **Phase 5: CI/CD + Cloud Deployment (Days 27–35)**
+## **Phase 5: CI/CD + Cloud Deployment (Days 27–35)**
 
 - [x] Create a Railway project
 - [x] Deploy Notification API → Railway
@@ -76,7 +78,7 @@
 
 ---
 
-## 🔵 **Phase 6: Advanced Features (Optional)**
+## **Phase 6: Advanced Features (Optional)**
 
 - [ ] Add a **Dashboard Worker** to consume events and save them in Postgres
 - [ ] Build a simple frontend (React/Next.js) to display notification logs
@@ -84,3 +86,520 @@
 - [ ] Add push notification support using Firebase Cloud Messaging
 - [ ] Scale Kafka consumers by running multiple worker replicas in Docker Compose
 - [ ] (Optional) Add tracing across services using OpenTelemetry & Jaeger
+
+Version 2:
+
+Awesome—let’s turn this into a **learn-and-build roadmap** for an OSS, self-hostable notification platform (Signalbus++), plus the two reusable libraries you want (`gomailer` and `gosms`). It’s structured so you **learn a concept, then immediately build the thing that uses it**. I’ve included detailed checklists you can literally check off as you go.
+
+---
+
+# 🎯 What to learn first (practical prerequisites)
+
+**Distributed systems & messaging**
+
+- Kafka fundamentals: partitions, ordering, keys, consumer groups, offset commits, rebalancing, lag.
+- Delivery semantics: at-least-once vs exactly-once (idempotent producer, transactional consumer), idempotency keys.
+- Retry patterns: exponential backoff + jitter, DLQ, redrive, replay.
+
+**Email core**
+
+- SMTP vs API providers (Mailgun, SendGrid, SES, Postmark).
+- MIME basics, plain vs HTML, attachments, inline images.
+- Deliverability: SPF, DKIM, DMARC (what they are, why they matter).
+
+**SMS core**
+
+- E.164 phone number format, country routing.
+- DLR (delivery receipts), webhooks, rate limits, cost awareness.
+
+**Push & Chat**
+
+- FCM (server key, device tokens, topics), APNs (p8 keys, JWT), Web Push (VAPID).
+- Slack/Discord webhooks and formatting.
+
+**API & security**
+
+- REST design, OpenAPI/Swagger.
+- API keys, HMAC request signing, idempotency keys.
+- Secrets management, key rotation, per-tenant rate limiting.
+
+**Persistence & schema**
+
+- Modeling events, notification jobs, delivery attempts, tenants, templates.
+- DB migrations (goose or golang-migrate).
+
+**Observability**
+
+- Prometheus metric design (cardinality!), Grafana dashboards.
+- Distributed tracing with OpenTelemetry + collector.
+
+**DevOps**
+
+- Dockerfiles for small static Go images, multi-stage builds.
+- Docker Compose for local, Helm for Kubernetes.
+- CI/CD with GitHub Actions; lint (golangci-lint), tests, SBOM (syft), vuln scan (trivy).
+
+**Testing**
+
+- Unit tests with provider fakes.
+- Contract tests against sandbox providers.
+- Load test (k6) and chaos (toxiproxy).
+
+---
+
+# Integrated Learn → Build roadmap
+
+Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship after every phase.
+
+## Phase 0 — Repo & skeleton (baseline)
+
+**Learn**
+
+- Monorepo organization, module boundaries, versioning.
+
+**Build**
+
+- Monorepo layout:
+
+  ```
+  /cmd
+    /api
+    /email-worker
+    /sms-worker
+    /push-worker
+  /internal
+    /notify   (domain models, routing)
+    /providers/email
+    /providers/sms
+    /providers/push
+    /db
+    /metrics
+    /auth
+  /pkg
+    /gomailer   (standalone module)
+    /gosms      (standalone module)
+  /deploy
+    /docker
+    /compose
+    /helm
+  /docs
+  ```
+
+- Tooling: go 1.22+, golangci-lint, pre-commit hooks, Makefile (`make test, lint, build, run`).
+- `docker-compose.yml` with Kafka+Zookeeper/Redpanda, Postgres, Prometheus, Grafana, Mailpit (SMTP test inbox).
+
+**Outcome**: `make up` boots full local stack with dashboards reachable.
+
+---
+
+## Phase 1 — Email foundations & `gomailer`
+
+**Learn**
+
+- SMTP handshake, TLS, app passwords.
+- API providers vs SMTP, deliverability trade-offs.
+
+**Build**
+
+1. **`pkg/gomailer` library**
+
+   - `Mailer` interface: `Send(Email) error`.
+   - Models: `Email{From, To, Subject, Text, HTML, Attachments}`.
+   - Drivers:
+
+     - **SMTP driver** (works with Gmail or any SMTP; test with Mailpit).
+     - **Mailgun driver** (REST API).
+
+   - Functional options (timeouts, headers), context support.
+   - Idempotency (optional header pass-through).
+   - Unit tests with fakes; example program in `/examples/gomailer`.
+
+2. **Email worker (first real microservice)**
+
+   - Kafka consumer group `notifications.email`.
+   - Reads JSON `{id, tenant, to, subject, templates, data, idempotencyKey}`.
+   - Uses `gomailer` with provider selection via config.
+   - Retries (exponential + jitter), DLQ on permanent failure.
+   - Prometheus metrics:
+
+     - `notification_send_total{channel="email",provider,tenant,status}`
+     - `notification_send_duration_seconds_bucket{channel="email",provider}`
+     - `notification_retry_total{channel="email",reason}`
+
+   - Logs in JSON (zap), correlation ID.
+
+**Outcome**: `curl` → Kafka → Email worker → message lands in Mailpit. Grafana shows counts & latency.
+
+---
+
+## Phase 2 — SMS foundations & `gosms`
+
+**Learn**
+
+- E.164, provider APIs, DLR semantics, inbound webhooks.
+
+**Build**
+
+1. **`pkg/gosms`** with interface `Send(to, body)`.
+
+   - Drivers: **Twilio** + **Vonage** (config-switchable).
+   - Normalize numbers to E.164; validate early.
+
+2. **SMS worker**
+
+   - Kafka consumer group `notifications.sms`.
+   - Retry & DLQ like email; per-tenant throttle (simple token bucket in memory).
+   - **DLR webhook** endpoint in API to mark “delivered/failed” asynchronously.
+
+**Outcome**: End-to-end SMS via Twilio sandbox; delivery status flows back into DB via webhook.
+
+---
+
+## Phase 3 — Notification API (publisher + admin)
+
+**Learn**
+
+- REST, OpenAPI; API keys & HMAC signing; idempotency.
+
+**Build**
+
+- `/publish/:topic` (generic) and `/notify` (policy-driven fan-out) endpoints.
+- Request schema includes `idempotency_key`, tenant, user contact info, channel overrides, and template data.
+- API Keys table (tenant, key hash, scopes, rate limit).
+- Middlewares: auth, rate limit (token bucket), idempotency store (Redis or Postgres unique index).
+- OpenAPI spec + Swagger UI.
+- Producer: idempotent Kafka producer keyed by tenant+user to preserve per-user order.
+
+**Outcome**: A single HTTP call can fan out to email+SMS topics, keys are validated, and duplicates are coalesced.
+
+---
+
+## Phase 4 — Persistence & query surface
+
+**Learn**
+
+- DB schema versioning, indexing for search, SLOs on queries.
+
+**Build**
+
+- Tables:
+
+  - `notifications(id, tenant, topic, user_ref, created_at, status)`
+  - `delivery_attempts(id, notification_id, channel, provider, status, error, try, latency_ms, created_at)`
+  - `api_keys(id, tenant, hash, scopes, created_at, last_used_at)`
+  - `templates(id, tenant, channel, name, version, engine, content, created_at)`
+
+- Repos + migrations (goose/golang-migrate).
+- API:
+
+  - `GET /notifications/:id`
+  - `GET /notifications?tenant=&status=&channel=&user=&limit=&cursor=`
+  - `POST /notifications/:id/redrive` (from DLQ)
+
+  **Outcome**: You can see history and redrive failed ones.
+
+---
+
+## Phase 5 — Templates, localization, preferences
+
+**Learn**
+
+- Go templates/Mustache, MJML → HTML; i18n patterns; DND windows.
+
+**Build**
+
+- Template engine abstraction: `Render(channel, name, locale, data) (Text, HTML)`.
+- Store templates in DB; optional filesystem loader for local dev.
+- User preferences: opt-outs per channel, quiet hours (timezone aware).
+- Policy engine: “for topic X → channels \[email, sms] unless user opted-out”.
+
+**Outcome**: Customizable content per tenant/locale with user-friendly opt-outs.
+
+---
+
+## Phase 6 — Observability & tracing (deep)
+
+**Learn**
+
+- Metric cardinality limits, RED/USE metrics; OpenTelemetry spans.
+
+**Build**
+
+- Standard metrics in all services:
+
+  - `http_requests_total{route,code}`
+  - `kafka_consumer_lag{group,topic,partition}`
+  - The channel metrics from earlier
+
+- Tracing:
+
+  - Span chain: API receive → Kafka produce → worker consume → provider call.
+  - OTel Collector + Jaeger/Tempo.
+
+- Grafana dashboards:
+
+  - API throughput, P95 latency.
+  - Per-channel success/failure.
+  - Kafka lag & rebalance count.
+  - Provider latency compare (Mailgun vs SendGrid, Twilio vs Vonage).
+
+**Outcome**: Click a trace and see the full lifecycle of one notification.
+
+---
+
+## Phase 7 — Multi-tenant & quotas (SaaS-ready)
+
+**Learn**
+
+- Tenant isolation models, per-tenant quotas, noisy neighbor control.
+
+**Build**
+
+- Tenant scoping on reads/writes; row-level security rules (optional).
+- Rate limit & quota counters by tenant.
+- Usage meter: `tenant_usage_total{tenant,channel}`.
+- Key rotation endpoints (create/revoke).
+
+  **Outcome**: Safe to host multiple apps on one cluster.
+
+---
+
+## Phase 8 — Push & Chat channels
+
+**Learn**
+
+- FCM topics & device tokens; APNs JWT; Web Push VAPID; Slack webhook payloads.
+
+**Build**
+
+- `gopush` abstraction: `Send(device, title, body, data)`.
+
+  - Drivers: FCM (first), APNs, Web Push.
+
+- Push worker: `notifications.push`.
+- Slack worker: `notifications.slack` via webhook.
+- Device token registry (user→tokens) with expiration and cleanup.
+
+**Outcome**: One publish can hit Email + SMS + Push + Slack.
+
+---
+
+## Phase 9 — Reliability extras & ops
+
+**Learn**
+
+- Replay vs redrive; exactly-once with Kafka transactions (trade-offs); outbox pattern.
+
+**Build**
+
+- Replay tool: re-publish from a time window or by query.
+- Redrive API from DLQ with optional re-templating.
+- TTL for topics; compaction for idempotency keys.
+- Lag alerts; KEDA autoscaling on consumer lag.
+
+**Outcome**: Operable in the real world.
+
+---
+
+## Phase 10 — Packaging, deployment, examples, docs
+
+**Learn**
+
+- Helm chart authoring; secrets; overlays; image hardening.
+
+**Build**
+
+- Minimal images (distroless or alpine), non-root user.
+- `docker-compose` quickstart with Mailpit.
+- Helm chart with values for providers, Postgres, Kafka endpoints.
+- GitHub Actions: lint → test → build images → SBOM → scan → push → publish Helm chart.
+- `/examples` clients in Go/Node/TS with a 10-line “send a notification” snippet.
+- README with quickstart, architecture diagram, dashboards, and “why”.
+
+**Outcome**: Anyone can clone → run → send a notification in minutes.
+
+---
+
+# Detailed checklists (copy/paste into your tracker)
+
+### Phase 0 — Skeleton
+
+- [ ] Create monorepo structure and Go modules.
+- [ ] Add Makefile, golangci-lint, pre-commit hooks.
+- [ ] `docker-compose` with Kafka, Postgres, Prometheus, Grafana, Mailpit.
+- [ ] Base Grafana dashboards provisioned.
+- [ ] Health endpoints for all services.
+
+### Phase 1 — `gomailer` + Email worker
+
+- [ ] Define `Mailer` interface and `Email` model.
+- [ ] Implement **SMTP** driver (tested against Mailpit + Gmail app password).
+- [ ] Implement **Mailgun** driver.
+- [ ] Context timeouts, retries at library level (optional).
+- [ ] Unit tests with provider fakes; example CLI.
+- [ ] Email worker consumes `notifications.email` with retry + DLQ.
+- [ ] Prometheus metrics; JSON logs; config for primary/fallback provider.
+
+### Phase 2 — `gosms` + SMS worker
+
+- [ ] Define interface and Twilio+Vonage drivers.
+- [ ] Normalize E.164 and validate.
+- [ ] DLR webhook and status updates.
+- [ ] SMS worker with retry + DLQ + per-tenant rate limit.
+- [ ] Metrics and tests.
+
+### Phase 3 — API
+
+- [ ] `/publish/:topic` and `/notify` (policy fan-out).
+- [ ] API key auth, rate limit middleware.
+- [ ] Idempotency keys (DB unique index + cache).
+- [ ] OpenAPI spec + Swagger UI.
+- [ ] Idempotent Kafka producer keyed by user.
+
+### Phase 4 — Persistence
+
+- [ ] Postgres schema for notifications, attempts, keys, templates.
+- [ ] Migrations with goose/golang-migrate.
+- [ ] `GET /notifications/:id` and search with pagination.
+- [ ] `POST /notifications/:id/redrive`.
+
+### Phase 5 — Templates & prefs
+
+- [ ] Template storage; engines (Go tmpl + MJML pipeline).
+- [ ] Localization field and selection.
+- [ ] Opt-out table and DND windows (tz aware).
+- [ ] Policy engine (topic → channels, honoring prefs).
+
+### Phase 6 — Observability
+
+- [ ] Standardize metrics names/labels.
+- [ ] OTel tracing across services.
+- [ ] Grafana dashboards for API, channels, Kafka lag, providers.
+- [ ] Alerting rules for failure rates & lag.
+
+### Phase 7 — Multi-tenant
+
+- [ ] Tenant column everywhere; scoped queries.
+- [ ] Quotas & per-tenant rate limits.
+- [ ] API key rotation endpoints.
+- [ ] Usage metrics and basic billing counters.
+
+### Phase 8 — Push & Chat
+
+- [ ] `gopush` with FCM (first), then APNs, Web Push.
+- [ ] Push worker & token registry.
+- [ ] Slack worker via webhook + formatting helpers.
+
+### Phase 9 — Reliability & ops
+
+- [ ] Replay tool (time range / query).
+- [ ] Redrive from DLQ with filter conditions.
+- [ ] Topic compaction for idempotency keys.
+- [ ] Autoscaling on lag (KEDA); lag/failure alerts.
+
+### Phase 10 — Packaging & docs
+
+- [ ] Distroless images; non-root user.
+- [ ] Helm chart with values; secrets guidance.
+- [ ] GitHub Actions pipeline (lint/test/build/publish/scan).
+- [ ] Examples in Go/Node/TS.
+- [ ] README with diagram, quickstart, dashboards, and provider setup guides.
+- [ ] CONTRIBUTING.md, CODE_OF_CONDUCT.md, Apache-2.0 license.
+
+---
+
+# Data & contract essentials (use early)
+
+**Event (published)**
+
+```json
+{
+  "id": "uuid",
+  "tenant": "acme",
+  "topic": "user.signup",
+  "user": { "email": "a@b.com", "phone": "+1123", "tokens": ["fcmToken"] },
+  "channels": ["email", "sms", "push"],
+  "template": { "name": "welcome", "locale": "en-US" },
+  "data": { "name": "Alice" },
+  "idempotency_key": "uuid-or-hash",
+  "created_at": "RFC3339"
+}
+```
+
+**DeliveryAttempt (stored)**
+
+- `attempt_id, notification_id, channel, provider, status(pending/sent/failed), try_no, error, latency_ms, created_at`
+
+---
+
+# Provider abstraction (mini blueprint)
+
+**Email**
+
+```go
+type EmailProvider interface {
+  Send(ctx context.Context, e Email) (ProviderMsgID string, err error)
+}
+```
+
+**SMS**
+
+```go
+type SMSProvider interface {
+  Send(ctx context.Context, to, body string) (ProviderMsgID string, err error)
+}
+```
+
+**Push**
+
+```go
+type PushProvider interface {
+  Send(ctx context.Context, token string, msg PushMessage) (ProviderMsgID string, err error)
+}
+```
+
+**Provider registry**
+
+```go
+type ProviderFactory func(cfg map[string]string) (any, error)
+// Register("email.mailgun", factory) → config driven selection + fallback chain
+```
+
+---
+
+# 🧪 Testing plan (baked in every phase)
+
+- Unit tests for providers with fakes (no network).
+- Integration tests with Mailpit for SMTP; Twilio test creds; Redpanda for Kafka.
+- k6 load test: publish 1k–10k events; assert success rate and P95.
+- toxiproxy to inject latency/timeouts; assert retries + fallback.
+- Golden tests for templates (rendered HTML/Text snapshots).
+
+---
+
+# Tooling you’ll reuse
+
+- **Kafka**: `segmentio/kafka-go` (you already use it).
+- **Metrics**: `prometheus/client_golang`.
+- **Tracing**: `go.opentelemetry.io/otel`.
+- **Migrations**: `github.com/pressly/goose` or `github.com/golang-migrate/migrate`.
+- **Lint**: `golangci-lint`.
+- **Config**: `viper` or environment + struct tags.
+- **Logging**: `uber-go/zap`.
+
+---
+
+## TL;DR build order (milestone view)
+
+1. Skeleton + local stack → `gomailer(SMTP+Mailgun)` → Email worker
+2. `gosms(Twilio+Vonage)` → SMS worker + DLR
+3. API (publish/notify, keys, idempotency)
+4. Persistence & redrive
+5. Templates, preferences, policy engine
+6. Observability & tracing
+7. Multi-tenant & quotas
+8. Push & Slack
+9. Replay/redrive tools, autoscaling
+10. Helm, CI/CD, examples, docs
+
+If you want, I can convert this into a **GitHub Project board (CSV/markdown)** with issues per task and acceptance criteria.
