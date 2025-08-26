@@ -400,3 +400,27 @@ Topics Learned:
 Pull requests are welcome! Open an issue first for feedback or discussion.
 
 ---
+
+V2:
+
+Event-Driven Notification Hub (Signalbus++)
+
+    What: A scalable notification platform like AWS SNS or Firebase FCM but open-source.
+
+    Features:
+
+        Multi-channel notifications (email, SMS, push, WebSocket)
+
+        Kafka or NATS for pub/sub message routing
+
+        Retry, dead-letter queues, scheduled delivery
+
+        Webhook support for external systems
+
+    Why Hard: Requires distributed messaging patterns, backpressure handling, observability, and worker architecture.
+
+    Why Startups Love It: Every app needs notifications.
+
+    Self-hostable: ✅
+
+    Free Hosting: Partially (Kafka is hard to host free, but NATS or Redis Streams works).
