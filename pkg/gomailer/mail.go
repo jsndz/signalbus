@@ -1,31 +1,24 @@
 package gomailer
 
-import (
-	"context"
-	"time"
-)
-
 type Mailer interface {
 	Send (Email) error
 }
 
 type Email struct{
 	From string 
-	To string
+	To []string
 	Subject string 
 	Text string
 	HTML string
 	Attachments []string
 
-	Timeout time.Duration
 	Headers map[string]string
-	Ctx context.Context
 }
 
 
 type EmailOption func(*Email)
 
-func NewEmail(from ,to string , opts ...EmailOption) Email{
+func NewEmail(from string,to []string , opts ...EmailOption) Email{
 	e:= Email{
 		From: from,
 		To: to,
@@ -59,18 +52,6 @@ func WithHTML(html string) EmailOption {
 func WithAttachments(files ...string) EmailOption {
 	return func(e *Email) {
 		e.Attachments = append(e.Attachments, files...)
-	}
-}
-
-func WithTimeout(time time.Duration) EmailOption {
-	return func(e *Email) {
-		e.Timeout = time
-	}
-}
-
-func WithContext(c context.Context) EmailOption {
-	return func(e *Email) {
-		e.Ctx = c
 	}
 }
 
