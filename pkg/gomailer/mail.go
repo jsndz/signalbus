@@ -10,8 +10,8 @@ type Email struct{
 	Subject string 
 	Text string
 	HTML string
+	IdempotencyKey string
 	Attachments []string
-
 	Headers map[string]string
 }
 
@@ -27,7 +27,6 @@ func NewEmail(from string,to []string , opts ...EmailOption) Email{
 	for _,opt :=range opts{
 		opt(&e)
 	}
-
 	return e
 }
 
