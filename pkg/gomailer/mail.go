@@ -10,14 +10,14 @@ type Mailer interface {
 }
 
 type Email struct{
-	From string 
-	To []string
-	Subject string 
-	Text string
-	HTML string
+	From string   `json:"from"`
+	To []string `json:"to"`
+	Subject string    `json:"subject,omitempty"`        
+	Text string    	`json:"text,omitempty"`
+	HTML string   	`json:"html,omitempty"`
 	IdempotencyKey string
 	Attachments []string
-	Headers map[string]string
+	Headers map[string]string   
 }
 
 

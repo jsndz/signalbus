@@ -4,28 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
-	"github.com/jsndz/signalbus/cmd/email_worker/service"
+	"github.com/jsndz/signalbus/metrics"
+	"github.com/jsndz/signalbus/pkg/gomailer"
 	"github.com/jsndz/signalbus/pkg/kafka"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
-type SignupRequest struct {
-	Username string `json:"username" binding:"required,min=3"`
-	Email    string `json:"email" binding:"required"`
-	Password string `json:"password" binding:"required"`
-	Phone    string `json:"phone" binding:"required"`
-}
+const maxRetries = 3
 
-type SuccessRequest struct {
-	Username string `json:"username" binding:"required,min=3"`
-	Email    string `json:"email" binding:"required"`
-	Amount   string `json:"amount" binding:"required"`
-	Phone    string `json:"phone" binding:"required"`
-	Method   string `json:"method" binding:"required"`
-}
-
-func SignupConsumer(broker string, ctx context.Context, mailService *service.MailClient, logger *zap.Logger) {
+func HandleMail(broker string, ctx context.Context, mailService gomailer.Mailer, logger *zap.Logger) {
 	topic := "notification.email"
 	c := kafka.NewConsumerFromEnv(topic,"email")
 	defer c.Close()
@@ -51,7 +41,7 @@ func SignupConsumer(broker string, ctx context.Context, mailService *service.Mai
 				zap.Int64("offset", m.Offset),
 			)
 
-			var messageBody SignupRequest
+			var messageBody gomailer.Email
 			err = json.Unmarshal(m.Value, &messageBody)
 			if err != nil {
 				logger.Error("Failed to unmarshal signup message",
@@ -60,72 +50,46 @@ func SignupConsumer(broker string, ctx context.Context, mailService *service.Mai
 				)
 				continue
 			}
+			mail := gomailer.NewEmail(messageBody.From,messageBody.To,
+				gomailer.WithHTML(messageBody.HTML),gomailer.WithText(messageBody.Text),
+				gomailer.WithSubject(messageBody.Subject))
 
-			logger.Info("Sending welcome email",
-				zap.String("to_email", messageBody.Email),
-				zap.String("username", messageBody.Username),
-			)
-
-			mailService.SendMailWithRetry(service.SendEmailRequest{
-				ToName:    messageBody.Username,
-				ToEmail:   messageBody.Email,
-				Subject:   "Welcome to SignalBus!",
-				PlainText: "Thank you for signing up. We're excited to have you on board.",
-				HTMLBody:  "<h1>Welcome!</h1><p>Thank you for signing up. We're excited to have you on board.</p>",
-			})
+			SendEmailWithRetry(logger,mailService,mail);
 		}
 	}
 }
 
-func PaymentSuccessConsumer(broker string, ctx context.Context, mailService *service.MailClient, logger *zap.Logger) {
-	topic := "notification.email"
-	c := kafka.NewConsumerFromEnv(topic,"email")
-	defer c.Close()
 
-	logger.Info("Starting Kafka consumer", zap.String("topic", topic), zap.String("broker", broker))
 
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Info("Shutting down PaymentSuccessConsumer", zap.String("topic", topic))
-			return
+func SendEmailWithRetry(Logger *zap.Logger,mailService gomailer.Mailer,mail gomailer.Email)(error){
+	timer := prometheus.NewTimer(metrics.NotificationSendDuration.WithLabelValues("sendgrid", "email_worker"))
+	defer timer.ObserveDuration()
 
-		default:
-			m, err := c.ReadFromKafka(ctx)
-			if err != nil {
-				logger.Error("Error reading Kafka message", zap.String("topic", topic), zap.Error(err))
-				continue
-			}
+	for attempt := 1; attempt <= maxRetries; attempt++ {
 
-			logger.Info("Kafka message received",
-				zap.String("topic", topic),
-				zap.ByteString("key", m.Key),
-				zap.Int64("offset", m.Offset),
-			)
+		err:= mailService.Send(mail)
+		if err == nil {
+			metrics.ExternalAPISuccess.WithLabelValues("sendgrid", "email_worker").Inc()
 
-			var messageBody SuccessRequest
-			err = json.Unmarshal(m.Value, &messageBody)
-			if err != nil {
-				logger.Error("Failed to unmarshal payment message",
-					zap.ByteString("raw", m.Value),
-					zap.Error(err),
-				)
-				continue
-			}
-
-			logger.Info("Sending payment confirmation email",
-				zap.String("to_email", messageBody.Email),
-				zap.String("amount", messageBody.Amount),
-				zap.String("method", messageBody.Method),
-			)
-
-			mailService.SendMail(service.SendEmailRequest{
-				ToName:    messageBody.Username,
-				ToEmail:   messageBody.Email,
-				Subject:   "Your payment was successful!",
-				PlainText: fmt.Sprintf("Hello, we have received your payment of %s via %s.", messageBody.Amount, messageBody.Method),
-				HTMLBody:  fmt.Sprintf("<p>Hello, we have received your payment of <strong>%s</strong> via <em>%s</em>.</p>", messageBody.Amount, messageBody.Method),
-			})
+			return nil
 		}
+
+		waitTime := time.Duration(attempt*2) * time.Second
+
+		Logger.Warn("Email send failed, will retry",
+			zap.Int("attempt", attempt),
+			zap.Duration("retry_in", waitTime),
+			zap.Error(err),
+		)
+
+		time.Sleep(waitTime)
 	}
+
+	err := fmt.Errorf("SendMail failed after %d retries", maxRetries)
+	metrics.ExternalAPIFailure.WithLabelValues("sendgrid", "email_worker").Inc()
+
+	Logger.Error("Final email send failure",
+		zap.Error(err),
+	)
+	return err
 }

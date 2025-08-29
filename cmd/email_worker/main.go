@@ -6,10 +6,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jsndz/signalbus/cmd/email_worker/handler"
-	"github.com/jsndz/signalbus/cmd/email_worker/service"
 	"github.com/jsndz/signalbus/logger"
 	"github.com/jsndz/signalbus/metrics"
 	"github.com/jsndz/signalbus/middlewares"
+	"github.com/jsndz/signalbus/pkg/config"
 	"github.com/jsndz/signalbus/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
@@ -42,11 +42,18 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	mailService := service.NewMailClient(log)
+	cfg ,err := config.LoadConfig("./config.yaml")
+	
+	if err!=nil {
+		log.Fatal(err.Error(), zap.Error(err))
+	}
+	Mailer,err := config.BuildMailer(cfg)
+	if err!=nil {
+		log.Fatal(err.Error(), zap.Error(err))
+	}
 	log.Info("Mail service initialized")
 
-	go handler.SignupConsumer(broker, ctx, mailService, log)
-	go handler.PaymentSuccessConsumer(broker, ctx, mailService, log)
+	go handler.HandleMail(broker, ctx, Mailer, log)
 
 	if err := router.Run(":3001"); err != nil {
 		log.Fatal("Failed to start HTTP server", zap.Error(err))

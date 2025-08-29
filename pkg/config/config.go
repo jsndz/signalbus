@@ -8,52 +8,54 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-
-type Config struct{
-	Tenants map[string]Tenant `yaml:"tenants"`
+type Config struct {
+	Email ServiceConfig `yaml:"email"`
 }
 
-type Tenant struct{
-	Provider string `yaml:"provider"`
-	SMTP *gomailer.SMTPMailer
-	SendGrid *gomailer.SendGridMailer
+type ServiceConfig struct {
+	Provider string          `yaml:"provider"`
+	SMTP     *gomailer.SMTPMailer     `yaml:"smtp,omitempty"`
+	SendGrid *gomailer.SendGridMailer `yaml:"sendgrid,omitempty"`
 }
 
-
-
-func UnmarshalYAML()(*map[string]gomailer.Mailer, error){
-	var config Config
-	data, err := os.ReadFile("config.yml")
-	if err!=nil {
-		return nil,err
+func LoadConfig(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
 	}
-	if err:= yaml.Unmarshal(data,&config);err!=nil{
-		return nil,err
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, err
 	}
-	mailerMap := make(map[string]gomailer.Mailer)
-	for id,tentantConfig := range config.Tenants{
-		switch tentantConfig.Provider {
-			case "smtp":{
-				mailerMap[id] = &gomailer.SMTPMailer{
-					Host:     tentantConfig.SMTP.Host,
-					Port:     tentantConfig.SMTP.Port,
-					Username: tentantConfig.SMTP.Username,
-					Password: tentantConfig.SMTP.Password,
-					UseAuth:  tentantConfig.SMTP.UseAuth,
-				}
-			}
-			case "sendgrid":{
-				mailerMap[id] = &gomailer.SendGridMailer{
-					APIKey:   tentantConfig.SendGrid.APIKey,
-					BaseURL:  tentantConfig.SendGrid.BaseURL,
-					FromName: tentantConfig.SendGrid.FromName,
-					FromMail: tentantConfig.SendGrid.FromMail,
-				}
-			}
-			default:
-            	return nil, fmt.Errorf("tenant %s has unsupported provider %s", id, tentantConfig.Provider)
-        
+	return &cfg, nil
+}
+
+func BuildMailer(cfg *Config) (gomailer.Mailer, error) {
+	switch cfg.Email.Provider {
+	case "smtp":
+		if cfg.Email.SMTP == nil {
+			return nil, fmt.Errorf("missing smtp config for email provider")
 		}
+		return &gomailer.SMTPMailer{
+			Host:     cfg.Email.SMTP.Host,
+			Port:     cfg.Email.SMTP.Port,
+			Username: cfg.Email.SMTP.Username,
+			Password: cfg.Email.SMTP.Password,
+			UseAuth:  cfg.Email.SMTP.UseAuth,
+		}, nil
+
+	case "sendgrid":
+		if cfg.Email.SendGrid == nil {
+			return nil, fmt.Errorf("missing sendgrid config for email provider")
+		}
+		return &gomailer.SendGridMailer{
+			APIKey:   cfg.Email.SendGrid.APIKey,
+			BaseURL:  cfg.Email.SendGrid.BaseURL,
+			FromName: cfg.Email.SendGrid.FromName,
+			FromMail: cfg.Email.SendGrid.FromMail,
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("unsupported email provider: %s", cfg.Email.Provider)
 	}
-	return &mailerMap,nil
 }
