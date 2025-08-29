@@ -206,3 +206,7 @@ Topics Learned:
 Pull requests are welcome! Open an issue first for feedback or discussion.
 
 ---
+
+## todos[Phase 2.5]
+
+- [] Idempotency for SMTP.

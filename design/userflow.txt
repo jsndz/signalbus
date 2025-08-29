@@ -1,0 +1,36 @@
+Developer (user of your OSS project)
+          │
+          │ 1. Install SDK (Go/Node client) or use REST API
+          │
+          ▼
+ ┌───────────────────────────┐
+ │   Configure Providers      │
+ │   (YAML/ENV file)          │
+ │   Example:                 │
+ │   EMAIL_PROVIDER=sendgrid  │
+ │   SMS_PROVIDER=twilio      │
+ └───────────┬────────────────┘
+             │
+             │ 2. Send Notification
+             │   API: POST /send
+             │   Body: { to, type, message }
+             ▼
+ ┌───────────────────────────┐
+ │   Your Notification API    │
+ │   (validates, enqueues)    │
+ └───────────┬────────────────┘
+             │
+             │ 3. Worker picks job from queue
+             │
+             ▼
+ ┌───────────────────────────┐
+ │   Provider Integration     │
+ │   (SendGrid, Twilio, etc.) │
+ └───────────┬────────────────┘
+             │
+             │ 4. Provider sends notification
+             ▼
+       ┌───────────────┐
+       │   End User     │
+       │ (Email/SMS/App)│
+       └───────────────┘

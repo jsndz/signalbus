@@ -12,19 +12,19 @@ import (
 	"strings"
 	"time"
 )
-
-type SMTPMailer struct{
-	Host     string
-	Port     int
-	Username string
-	Password string
-	UseAuth  bool
-	TLSConfig *tls.Config
-	Timeout time.Duration
-	Headers map[string]string
-	Ctx context.Context
-	IdempotencyKey string
+type SMTPMailer struct {
+	Host            string            `yaml:"host"`
+	Port            int               `yaml:"port"`
+	Username        string            `yaml:"username"`
+	Password        string            `yaml:"password"`
+	UseAuth         bool              `yaml:"useAuth"`
+	TLSConfig       *tls.Config        `yaml:"tlsConfig,omitempty"`
+	Timeout         time.Duration     `yaml:"timeout"`
+	Headers         map[string]string `yaml:"headers"`
+	IdempotencyKey  string            `yaml:"idempotencyKey"`
+	Ctx 			context.Context
 }
+
 
 
 func (m *SMTPMailer) tlsConfig()*tls.Config{
@@ -49,7 +49,10 @@ func (m *SMTPMailer) Send (email Email) error{
 	msg.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(email.To, ",")))
 	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", email.Subject))
 	msg.WriteString("MIME-Version: 1.0\r\n")
+	for k,v :=range email.Headers{
+		msg.WriteString(fmt.Sprintf("%s:%s\r\n",k,v))
 
+	}
 	
 	boundary := "SIGNALBUS_BOUNDARY"
 	if len(email.Attachments) > 0 {

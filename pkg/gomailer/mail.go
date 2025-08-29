@@ -1,5 +1,10 @@
 package gomailer
 
+//any method that uses Send (Email) error is a Mailer interface
+//so All these mailers essentially are of type Mailer
+//user can decide which to choose and call mailer effectively
+// this can do abstractions like m= &SMTPMailer{}
+// m.send() this gives abstraction
 type Mailer interface {
 	Send (Email) error
 }

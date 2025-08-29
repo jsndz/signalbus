@@ -1,0 +1,15 @@
+tenants:
+  tenantA:
+    provider: smtp
+    smtp:
+      host: smtp.gmail.com
+      port: 587
+      username: user@gmail.com
+      password: secret
+      useAuth: true
+
+  tenantB:
+    provider: mailgun
+    mailgun:
+      apiKey: key-xyz
+      domain: example.com

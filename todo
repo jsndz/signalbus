@@ -420,23 +420,13 @@ Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship af
 
 ---
 
-# Detailed checklists (copy/paste into your tracker)
-
-### Phase 0 — Skeleton
-
-- [ ] Create monorepo structure and Go modules.
-- [ ] Add Makefile, golangci-lint, pre-commit hooks.
-- [ ] `docker-compose` with Kafka, Postgres, Prometheus, Grafana, Mailpit.
-- [ ] Base Grafana dashboards provisioned.
-- [ ] Health endpoints for all services.
-
 ### Phase 1 — `gomailer` + Email worker
 
-- [ ] Define `Mailer` interface and `Email` model.
-- [ ] Implement **SMTP** driver (tested against Mailpit + Gmail app password).
-- [ ] Implement **Mailgun** driver.
-- [ ] Context timeouts, retries at library level (optional).
-- [ ] Unit tests with provider fakes; example CLI.
+- [x] Define `Mailer` interface and `Email` model.
+- [x] Implement **SMTP** driver (tested against Mailpit + Gmail app password).
+- [x] Implement **Mailgun** driver.
+- [x] Context timeouts, retries at library level (optional).
+- [x] Unit tests with provider fakes; example CLI.
 - [ ] Email worker consumes `notifications.email` with retry + DLQ.
 - [ ] Prometheus metrics; JSON logs; config for primary/fallback provider.
 

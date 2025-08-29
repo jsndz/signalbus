@@ -1,6 +1,7 @@
 package gomailer_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -71,6 +72,7 @@ func TestSendMail(t *testing.T)  {
 		Port: 1025,
 		UseAuth: false,
 		Timeout: 5 * time.Second,
+		Ctx:context.Background(),
 	}
 
 	email := gomailer.NewEmail(

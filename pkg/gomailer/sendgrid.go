@@ -12,14 +12,14 @@ import (
 )
 
 type SendGridMailer struct{
-	APIKey string
-	BaseURL string
-	Timeout time.Duration
-	FromName string
-	FromMail string
-	IdempotencyKey string
+	APIKey          string            `yaml:"apiKey"`
+    BaseURL         string            `yaml:"baseURL"`
+    Timeout         time.Duration     `yaml:"timeout"`
+    FromName        string            `yaml:"fromName"`
+    FromMail        string            `yaml:"fromMail"`
+    IdempotencyKey  string            `yaml:"idempotencyKey"`
+    Headers         map[string]string `yaml:"headers,omitempty"`
 	Client   *sendgrid.Client
-	Headers map[string]string
 	Ctx context.Context
 }
 
@@ -70,8 +70,10 @@ func (s *SendGridMailer) Send(e Email) error {
 	}
 	request.Header.Set("Authorization", "Bearer "+s.APIKey)
 	request.Header.Set("Content-Type", "application/json")
+	for k,v := range e.Headers{
+		request.Header.Set(k, v)
+	}
 	if e.IdempotencyKey != "" {
-		
 		request.Header.Set("Idempotency-Key", e.IdempotencyKey)
 	}
 	client := &http.Client{Timeout: s.Timeout}

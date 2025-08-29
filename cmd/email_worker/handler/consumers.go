@@ -26,7 +26,7 @@ type SuccessRequest struct {
 }
 
 func SignupConsumer(broker string, ctx context.Context, mailService *service.MailClient, logger *zap.Logger) {
-	topic := "user_signup"
+	topic := "notification.email"
 	c := kafka.NewConsumerFromEnv(topic,"email")
 	defer c.Close()
 
@@ -78,8 +78,8 @@ func SignupConsumer(broker string, ctx context.Context, mailService *service.Mai
 }
 
 func PaymentSuccessConsumer(broker string, ctx context.Context, mailService *service.MailClient, logger *zap.Logger) {
-	topic := "payment_success"
-	c := kafka.NewConsumerFromEnv(topic,"payment")
+	topic := "notification.email"
+	c := kafka.NewConsumerFromEnv(topic,"email")
 	defer c.Close()
 
 	logger.Info("Starting Kafka consumer", zap.String("topic", topic), zap.String("broker", broker))
