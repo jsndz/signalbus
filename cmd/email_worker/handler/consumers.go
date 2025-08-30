@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/jsndz/signalbus/metrics"
@@ -73,8 +74,10 @@ func SendEmailWithRetry(Logger *zap.Logger,mailService gomailer.Mailer,mail goma
 
 			return nil
 		}
-
-		waitTime := time.Duration(attempt*2) * time.Second
+		baseTime := 1 * time.Second
+		backoffDelay := baseTime * time.Duration(1<<(attempt-1)) 
+		jitter := time.Duration(rand.Intn(1000)) * time.Millisecond
+		waitTime := backoffDelay * jitter
 
 		Logger.Warn("Email send failed, will retry",
 			zap.Int("attempt", attempt),
