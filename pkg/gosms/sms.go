@@ -13,7 +13,7 @@ type SMS struct{
 
 type SMSOption func(*SMS) 
 
-func NewSMS(from string,to string,text string, opts... SMSOption) SMS{
+func NewSMS(to string,text string, opts... SMSOption) SMS{
 	s:= SMS{
 		To:to,
 		Text: text,

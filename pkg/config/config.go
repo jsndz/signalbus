@@ -5,18 +5,26 @@ import (
 	"os"
 
 	"github.com/jsndz/signalbus/pkg/gomailer"
+	"github.com/jsndz/signalbus/pkg/gosms"
 	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	Email ServiceConfig `yaml:"email"`
+	Email EmailConfig `yaml:"email"`
+	SMS   SMSConfig `yaml:"sms"`
 }
 
-type ServiceConfig struct {
+type EmailConfig struct {
 	Provider string          `yaml:"provider"`
 	SMTP     *gomailer.SMTPMailer     `yaml:"smtp,omitempty"`
 	SendGrid *gomailer.SendGridMailer `yaml:"sendgrid,omitempty"`
 }
+
+type SMSConfig struct {
+	Provider string          `yaml:"provider"`
+	Twilio *gosms.TwilioSender `yaml:"twilio,omitempty"`
+}
+
 
 func LoadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -31,6 +39,7 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 func BuildMailer(cfg *Config) (gomailer.Mailer, error) {
+	
 	switch cfg.Email.Provider {
 	case "smtp":
 		if cfg.Email.SMTP == nil {
@@ -59,3 +68,23 @@ func BuildMailer(cfg *Config) (gomailer.Mailer, error) {
 		return nil, fmt.Errorf("unsupported email provider: %s", cfg.Email.Provider)
 	}
 }
+
+func BuildSender(cfg *Config) (gosms.Sender, error) {
+		
+	switch cfg.SMS.Provider {
+		case "twilio":
+			if cfg.SMS.Twilio == nil {
+				return nil, fmt.Errorf("missing sms config for sms provider")
+			}
+			return &gosms.TwilioSender{
+				FromNumber: cfg.SMS.Twilio.FromNumber,
+				Username: cfg.SMS.Twilio.Username,
+				Password: cfg.SMS.Twilio.Password,
+
+			},nil
+	default:
+		return nil, fmt.Errorf("unsupported email provider: %s", cfg.Email.Provider)
+	}
+}
+
+

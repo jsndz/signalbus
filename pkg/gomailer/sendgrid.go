@@ -23,11 +23,6 @@ type SendGridMailer struct{
 	Ctx context.Context
 }
 
-type MailClient struct {
-	FromMail string
-	Client   *sendgrid.Client
-}
-
 
 func NewSendGridMailer(apiKey, fromName, fromMail string) *SendGridMailer {
 	return &SendGridMailer{

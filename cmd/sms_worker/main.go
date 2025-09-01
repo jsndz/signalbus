@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -10,7 +9,7 @@ import (
 	"github.com/jsndz/signalbus/logger"
 	"github.com/jsndz/signalbus/metrics"
 	"github.com/jsndz/signalbus/middlewares"
-	"github.com/jsndz/signalbus/pkg/kafka"
+	"github.com/jsndz/signalbus/pkg/config"
 	"github.com/jsndz/signalbus/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
@@ -46,43 +45,21 @@ func main() {
 		ctx.JSON(http.StatusAccepted, gin.H{"message": "ok"})
 	})
 
-	topic := "user_signup"
-	consumer := kafka.NewConsumerFromEnv(topic,"sms")
-	defer consumer.Close()
+	
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	cfg ,err := config.LoadConfig("./config.yaml")
+	if err!=nil {
+		log.Fatal(err.Error(), zap.Error(err))
+	}
+	Sender,err := config.BuildSender(cfg)
+	if err!=nil {
+		log.Fatal(err.Error(), zap.Error(err))
+	}
+	log.Info("Mail service initialized")
+	go service.HandleSMS(broker, ctx, Sender, log)
 
-	smsService := service.NewSMSClient(log)
-
-	go func() {
-		log.Info("Started Kafka consumer", zap.String("topic", topic))
-		for {
-			msg, err := consumer.ReadFromKafka(ctx)
-			if err != nil {
-				log.Error("Error reading from Kafka", zap.Error(err))
-				continue
-			}
-
-			log.Info("Kafka message received",
-				zap.String("topic", topic),
-				zap.ByteString("key", msg.Key),
-				zap.Int64("offset", msg.Offset),
-			)
-
-			var payload SignupRequest
-			if err := json.Unmarshal(msg.Value, &payload); err != nil {
-				log.Error("Failed to parse Kafka message",
-					zap.ByteString("raw", msg.Value),
-					zap.Error(err),
-				)
-				continue
-			}
-
-			log.Info("Sending SMS", zap.String("phone", payload.Phone))
-			smsService.SendSMS(payload.Phone)
-		}
-	}()
 
 	if err := router.Run(":3000"); err != nil {
 		log.Fatal("Failed to start HTTP server", zap.Error(err))

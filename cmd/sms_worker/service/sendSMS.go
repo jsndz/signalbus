@@ -1,93 +1,76 @@
 package service
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/jsndz/signalbus/metrics"
-	"github.com/jsndz/signalbus/pkg/utils"
+	"github.com/jsndz/signalbus/pkg/gosms"
+	"github.com/jsndz/signalbus/pkg/kafka"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/twilio/twilio-go"
-	api "github.com/twilio/twilio-go/rest/api/v2010"
 	"go.uber.org/zap"
 )
 
 const maxRetries = 3
 
-type SMSClient struct {
-	FromNumber string
-	Client     *twilio.RestClient
-	Logger     *zap.Logger
-}
 
-func NewSMSClient(logger *zap.Logger) *SMSClient {
-	accountSid := utils.GetEnv("TWILIO_ACCOUNT_SID")
-	authToken := utils.GetEnv("TWILIO_AUTH_TOKEN")
-	fromNumber := utils.GetEnv("TWILIO_PHONE_NUMBER")
 
-	client := twilio.NewRestClientWithParams(
-		twilio.ClientParams{
-			Username: accountSid,
-			Password: authToken,
-		})
 
-	return &SMSClient{
-		FromNumber: fromNumber,
-		Client:     client,
-		Logger:     logger,
+func  HandleSMS(broker string, ctx context.Context, smsService gosms.Sender, logger *zap.Logger)  {
+	topic:= "notification.sms"
+	c := kafka.NewConsumerFromEnv(topic,"sms")
+	defer c.Close()
+
+	logger.Info("Starting Kafka consumer", zap.String("topic", topic), zap.String("broker", broker))
+
+	for {
+		select{
+		case <-ctx.Done():
+			logger.Info("Shutting down SignupConsumer", zap.String("topic", topic))
+			return
+		default:
+			m,err:= c.ReadFromKafka(ctx)
+			if err!= nil{
+				logger.Error("Error reading Kafka message", zap.String("topic", topic), zap.Error(err))
+				continue
+			}
+			 logger.Info("Kafka message received",
+				zap.String("topic", topic),
+				zap.ByteString("key", m.Key),
+				zap.Int64("offset", m.Offset),
+			)
+			var messageBody gosms.SMS
+			if err:= json.Unmarshal(m.Value,messageBody); err!=nil{
+				logger.Error("Failed to unmarshal signup message",
+					zap.ByteString("raw", m.Value),
+					zap.Error(err),
+				)
+				continue
+			}
+			sms := gosms.NewSMS(messageBody.To,messageBody.Text,gosms.WithIdempotencyKey(messageBody.IdempotencyKey))
+			SendSMSWithRetry(logger,smsService,sms)
+		}
 	}
 }
 
-func (c *SMSClient) SendSMS(toNumber string) error {
-	body := "Welcome to SignalBus"
-	c.Logger.Info("Sending SMS",
-		zap.String("to", toNumber),
-		zap.String("body", body),
-	)
-
-	params := &api.CreateMessageParams{}
-	params.SetBody(body)
-	params.SetFrom(c.FromNumber)
-	params.SetTo(toNumber)
-
-	resp, err := c.Client.Api.CreateMessage(params)
-	if err != nil {
-		c.Logger.Error("Twilio API error while sending SMS",
-			zap.String("to", toNumber),
-			zap.Error(err),
-		)
-		metrics.ExternalAPIFailure.WithLabelValues("twilio", "sms_worker").Inc()
-		return err
-	}
-
-	if resp.Sid != nil {
-		c.Logger.Info("SMS sent successfully",
-			zap.String("to", toNumber),
-			zap.String("sid", *resp.Sid),
-		)
-		metrics.ExternalAPISuccess.WithLabelValues("twilio", "sms_worker").Inc()
-	} else {
-		c.Logger.Error("SMS send failed: no SID returned",
-			zap.String("to", toNumber),
-		)
-		metrics.ExternalAPIFailure.WithLabelValues("twilio", "sms_worker").Inc()
-	}
-	return nil
-}
-
-func (c *SMSClient) SendSMSWithRetry(toNumber string) error {
+func  SendSMSWithRetry(Logger *zap.Logger,smsService gosms.Sender,sms gosms.SMS) error {
 	timer := prometheus.NewTimer(metrics.NotificationSendDuration.WithLabelValues("twilio", "sms_worker"))
 	defer timer.ObserveDuration()
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		err := c.SendSMS(toNumber)
+		err := smsService.Send(sms)
 		if err == nil {
+			metrics.ExternalAPISuccess.WithLabelValues("twilio", "sms_worker").Inc()
 			return nil
 		}
-
-		waitTime := time.Duration(attempt*2) * time.Second
-		c.Logger.Warn("SMS send attempt failed, will retry",
-			zap.String("to", toNumber),
+		baseTime := 1 * time.Second
+		backoffDelay := baseTime * time.Duration(1<<(attempt-1)) 
+		jitter := time.Duration(rand.Intn(1000)) * time.Millisecond
+		waitTime := backoffDelay * jitter
+		Logger.Warn("SMS send attempt failed, will retry",
 			zap.Int("attempt", attempt),
 			zap.Error(err),
 			zap.Duration("retry_in", waitTime),
@@ -96,10 +79,12 @@ func (c *SMSClient) SendSMSWithRetry(toNumber string) error {
 		time.Sleep(waitTime)
 	}
 
-	finalErr := fmt.Errorf("failed to send SMS after %d retries", maxRetries)
-	c.Logger.Error("Final SMS send failure",
-		zap.String("to", toNumber),
-		zap.Error(finalErr),
+	err := fmt.Errorf("SendMail failed after %d retries", maxRetries)
+	metrics.ExternalAPIFailure.WithLabelValues("sendgrid", "email_worker").Inc()
+
+	Logger.Error("Final SMS send failure",
+		zap.String("to", sms.To),
+		zap.Error(err),
 	)
-	return finalErr
+	return err
 }

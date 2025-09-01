@@ -9,11 +9,13 @@ import (
 )
 
 type TwilioSender struct{		
+	Username         string `yaml:"username"`
+	Password 		string `yaml:"password"`
 	FromNumber        string          `yaml:"fromNumber"`
     Timeout         time.Duration     `yaml:"timeout"`
     IdempotencyKey  string            `yaml:"idempotencyKey"`
     Headers         map[string]string `yaml:"headers,omitempty"`
-	Client     *twilio.RestClient
+	Client          *twilio.RestClient
 	Ctx context.Context
 }
 
