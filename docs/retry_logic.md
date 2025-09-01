@@ -40,8 +40,14 @@ To fix this we use exponential backoff with with jitter.
 Jitter here means adding timedelays.
 
 ```go
-        baseTime := 1 * time.Second
-		backoffDelay := baseTime * time.Duration(1<<(attempt-1))
-		jitter := time.Duration(rand.Intn(1000)) * time.Millisecond
-		waitTime := backoffDelay * jitter
+    baseTime := 1 * time.Second
+    backoffDelay := baseTime * time.Duration(1<<(attempt-1))
+    jitter := time.Duration(rand.Intn(1000)) * time.Millisecond
+    waitTime := backoffDelay * jitter
 ```
+
+Why Exponential Backoff?
+
+Reduce load on a failing service
+Better resource usage on your side
+Plays well with rate limits

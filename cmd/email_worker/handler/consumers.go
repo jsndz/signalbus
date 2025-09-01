@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/jsndz/signalbus/metrics"
@@ -91,8 +92,10 @@ func SendEmailWithRetry(Logger *zap.Logger,mailService gomailer.Mailer,mail goma
 	err := fmt.Errorf("SendMail failed after %d retries", maxRetries)
 	metrics.ExternalAPIFailure.WithLabelValues("sendgrid", "email_worker").Inc()
 
-	Logger.Error("Final email send failure",
-		zap.Error(err),
+	Logger.Error("Permanent email failure - message lost",
+		zap.String("to", strings.Join(mail.To, ",")),
+		zap.String("subject", mail.Subject),
+		zap.String("reason", "max_retries_exceeded"),
 	)
 	return err
 }

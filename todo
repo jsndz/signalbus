@@ -427,8 +427,8 @@ Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship af
 - [x] Implement **Mailgun** driver.
 - [x] Context timeouts, retries at library level (optional).
 - [x] Unit tests with provider fakes; example CLI.
-- [ ] Email worker consumes `notifications.email` with retry + DLQ.
-- [ ] Prometheus metrics; JSON logs; config for primary/fallback provider.
+- [x] Email worker consumes `notifications.email` with retry + DLQ.
+- [x] Prometheus metrics; JSON logs; config for primary/fallback provider.
 
 ### Phase 2 — `gosms` + SMS worker
 
