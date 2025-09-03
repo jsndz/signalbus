@@ -43,7 +43,7 @@ func  HandleSMS(broker string, ctx context.Context, smsService gosms.Sender, log
 				zap.Int64("offset", m.Offset),
 			)
 			var messageBody gosms.SMS
-			if err:= json.Unmarshal(m.Value,messageBody); err!=nil{
+			if err:= json.Unmarshal(m.Value,&messageBody); err!=nil{
 				logger.Error("Failed to unmarshal signup message",
 					zap.ByteString("raw", m.Value),
 					zap.Error(err),
@@ -80,7 +80,7 @@ func  SendSMSWithRetry(Logger *zap.Logger,smsService gosms.Sender,sms gosms.SMS)
 	}
 
 	err := fmt.Errorf("SendMail failed after %d retries", maxRetries)
-	metrics.ExternalAPIFailure.WithLabelValues("sendgrid", "email_worker").Inc()
+	metrics.ExternalAPIFailure.WithLabelValues("twilio", "sms_worker").Inc()
 
 	Logger.Error("Final SMS send failure",
 		zap.String("to", sms.To),

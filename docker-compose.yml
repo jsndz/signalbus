@@ -76,5 +76,19 @@ services:
     depends_on:
       - kafka
 
+  tenant-db:
+    image: postgres:15
+    container_name: tenant-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: signal_bus
+      POSTGRES_DB: tenant
+    volumes:
+      - tenant-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
 volumes:
   grafana-storage:
+  tenant-data:

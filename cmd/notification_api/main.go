@@ -10,17 +10,22 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 
-	api "github.com/jsndz/signalbus/cmd/api/internal"
+	"github.com/jsndz/signalbus/cmd/notification_api/app/routes"
 	"github.com/jsndz/signalbus/logger"
 	"github.com/jsndz/signalbus/metrics"
 	"github.com/jsndz/signalbus/middlewares"
+	"github.com/jsndz/signalbus/pkg/database"
 	"github.com/jsndz/signalbus/pkg/kafka"
 	"github.com/jsndz/signalbus/pkg/utils"
 )
 
 func main() {
 	broker := utils.GetEnv("KAFKA_BROKER")
-
+	dns := os.Getenv("DB_DNS")
+	db,err := database.InitDB(dns)
+	if err != nil {
+		panic("DB not init  " + err.Error())
+	}
 	log, err := logger.InitLogger()
 	if err != nil {
 		panic("Failed to initialize zap logger: " + err.Error())
@@ -28,7 +33,6 @@ func main() {
 	log.Info("Logger initialized")
 
 	metrics.InitAPIMetrics()
-
 	producer := kafka.NewProducer([]string{broker})
 	log.Info("Kafka producer initialized", zap.String("broker", broker))
 
@@ -42,8 +46,8 @@ func main() {
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	v1 := router.Group("/api")
-	api.Notify(v1.Group("/notify"), producer, log)
-
+	routes.Notify(v1.Group("/notify"), producer,db, log)
+	
 	go handleShutdown(producer, log)
 
 	if err := router.Run(); err != nil {

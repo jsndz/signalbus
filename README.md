@@ -211,3 +211,4 @@ Pull requests are welcome! Open an issue first for feedback or discussion.
 
 - [] Idempotency for SMTP.
 - [] DLQ
+- [] DLR webhook

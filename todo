@@ -242,7 +242,7 @@ Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship af
 
 1. **`pkg/gosms`** with interface `Send(to, body)`.
 
-   - Drivers: **Twilio** + **Vonage** (config-switchable).
+   - Drivers: **Twilio** + **VHMAC proves body wasn’t tamperedonage** (config-switchable).
    - Normalize numbers to E.164; validate early.
 
 2. **SMS worker**
@@ -432,11 +432,12 @@ Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship af
 
 ### Phase 2 — `gosms` + SMS worker
 
-- [ ] Define interface and Twilio+Vonage drivers.
+- [x] Define interface and Twilio+Vonage drivers.
 - [ ] Normalize E.164 and validate.
 - [ ] DLR webhook and status updates.
-- [ ] SMS worker with retry + DLQ + per-tenant rate limit.
-- [ ] Metrics and tests.
+- [x] SMS worker with retry + DLQ + per-tenant rate limit.
+- [x] Metrics
+- [ ] Tests
 
 ### Phase 3 — API
 
