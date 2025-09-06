@@ -46,7 +46,7 @@ func main() {
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	v1 := router.Group("/api")
-	routes.Notify(v1.Group("/notify"), producer,db, log)
+	routes.Notifications(v1.Group("/notify"), producer,db, log)
 	
 	go handleShutdown(producer, log)
 

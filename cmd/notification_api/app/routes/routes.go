@@ -8,6 +8,16 @@ import (
 	"gorm.io/gorm"
 )
 
-func Notify(router *gin.RouterGroup,p *kafka.Producer,db *gorm.DB,log *zap.Logger ){
+func Notifications(router *gin.RouterGroup,p *kafka.Producer,db *gorm.DB,log *zap.Logger ){
 	router.GET("/notify",handler.Notify(p,db,log))
+}
+
+
+func Tenants(db *gorm.DB,log *zap.Logger,r *gin.RouterGroup ){
+	tenantHandler :=handler.NewTenantHandler(db)
+	r.POST("/tenants", tenantHandler.CreateTenant)
+	r.GET("/tenants", tenantHandler.ListTenants)
+	r.GET("/tenants/:id", tenantHandler.GetTenant)
+	r.DELETE("/tenants/:id", tenantHandler.DeleteTenant)
+	r.POST("/policies", tenantHandler.CreatePolicy)
 }

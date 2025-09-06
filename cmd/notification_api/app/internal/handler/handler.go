@@ -41,7 +41,3 @@ func Notify(p *kafka.Producer,db *gorm.DB,log *zap.Logger)gin.HandlerFunc{
 		})
 	}
 }
-
-
-
-
