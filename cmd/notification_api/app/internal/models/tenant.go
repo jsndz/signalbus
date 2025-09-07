@@ -21,7 +21,7 @@ type Tenant struct {
 type APIKey struct {
     ID        uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
     TenantID  uuid.UUID `gorm:"type:uuid;not null;index"`
-    Hash      string    `gorm:"not null"`
+    Hash      string    `gorm:"not null;uniqueIndex"`
     Scopes    []string  `gorm:"type:text[]"`
     CreatedAt time.Time `gorm:"autoCreateTime"`
 

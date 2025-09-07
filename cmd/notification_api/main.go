@@ -47,7 +47,7 @@ func main() {
 
 	v1 := router.Group("/api")
 	routes.Notifications(v1.Group("/notify"), producer,db, log)
-	
+	routes.Tenants(v1.Group("/tenants"),db,log)
 	go handleShutdown(producer, log)
 
 	if err := router.Run(); err != nil {

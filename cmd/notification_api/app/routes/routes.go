@@ -13,7 +13,7 @@ func Notifications(router *gin.RouterGroup,p *kafka.Producer,db *gorm.DB,log *za
 }
 
 
-func Tenants(db *gorm.DB,log *zap.Logger,r *gin.RouterGroup ){
+func Tenants(r *gin.RouterGroup,db *gorm.DB,log *zap.Logger ){
 	tenantHandler :=handler.NewTenantHandler(db)
 	r.POST("/tenants", tenantHandler.CreateTenant)
 	r.GET("/tenants", tenantHandler.ListTenants)

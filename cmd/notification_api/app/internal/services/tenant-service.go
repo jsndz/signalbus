@@ -55,3 +55,12 @@ func (s *TenantService) CreatePolicy(tenantID uuid.UUID, topic string, channels 
 	}
 	return policy, nil
 }
+
+
+func (s *TenantService) GetTenantByAPIKey(apiKey string) (*models.Tenant, error) {
+	tenant ,err := s.repo.GetTenantByAPIKey(apiKey)
+	if err != nil {
+		return nil, err
+	}
+	return tenant, nil
+}

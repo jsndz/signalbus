@@ -63,3 +63,18 @@ func (r *TenantRepository) GetPoliciesByTenant(tenantID uuid.UUID) ([]models.Pol
 	}
 	return policies, nil
 }
+
+
+func (r *TenantRepository) GetTenantByAPIKey(apiKey string) (*models.Tenant, error){
+	var key models.APIKey
+    if err := r.db.Where("hash = ?", apiKey).First(&key).Error; err != nil {
+        return nil, err
+    }
+
+    var tenant models.Tenant
+    if err := r.db.First(&tenant, "id = ?", key.TenantID).Error; err != nil {
+        return nil, err
+    }
+
+    return &tenant, nil
+}
