@@ -64,3 +64,9 @@ func (s *TenantService) GetTenantByAPIKey(apiKey string) (*models.Tenant, error)
 	}
 	return tenant, nil
 }
+
+
+func (s *TenantService) CheckForValidTenant(apiKey string) (bool, error) {
+	exist ,err := s.repo.CheckIfTenantExist(apiKey)
+	return exist,err
+}

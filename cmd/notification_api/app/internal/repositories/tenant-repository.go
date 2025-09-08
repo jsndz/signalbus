@@ -1,6 +1,8 @@
 package repositories
 
 import (
+	"errors"
+
 	"github.com/google/uuid"
 	"github.com/jsndz/signalbus/cmd/notification_api/app/internal/models"
 	"gorm.io/gorm"
@@ -75,6 +77,17 @@ func (r *TenantRepository) GetTenantByAPIKey(apiKey string) (*models.Tenant, err
     if err := r.db. Preload("Policies").First(&tenant, "id = ?", key.TenantID).Error; err != nil {
         return nil, err
     }
-
     return &tenant, nil
+}
+
+
+func (r *TenantRepository) CheckIfTenantExist(apiKey string) (bool, error) {
+	var key models.APIKey
+	if err := r.db.Where("hash = ?", apiKey).First(&key).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }

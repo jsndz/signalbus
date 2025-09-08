@@ -14,7 +14,6 @@ import (
 
 type NotifyRequest struct {
     EventType      string                 `json:"event_type" binding:"required"`
-    Tenant         string                 `json:"tenant" binding:"required"`
 	ApiKey			string					`json:"api_key" binding:"required"`
     Data           map[string]interface{} `json:"data" binding:"required"`
     IdempotencyKey string                 `json:"idempotency_key" binding:"required"`
@@ -25,22 +24,26 @@ type NotificationMessage struct {
     Data           map[string]interface{} `json:"data"`
 }
 
-func Notify(p *kafka.Producer,db *gorm.DB,log *zap.Logger)gin.HandlerFunc{
+
+func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		s := services.NewTenantService(db)
 
 		log.Info("Incoming HTTP request",
-			zap.String("endpoint", "/Notify"),
+			zap.String("endpoint", "/notify"),
 			zap.String("method", c.Request.Method),
 			zap.String("client_ip", c.ClientIP()),
 		)
+
 		var req NotifyRequest
-		if err:= c.ShouldBindJSON(&req); err!=nil{
-			c.JSON(http.StatusAccepted, gin.H{
-				"error": "COuldn't unmarshal JSON",
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "couldn't unmarshal JSON: " + err.Error(),
 			})
+			return
 		}
-				tenant, err := s.GetTenantByAPIKey(req.ApiKey)
+
+		tenant, err := s.GetTenantByAPIKey(req.ApiKey)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "invalid API key",
@@ -48,28 +51,82 @@ func Notify(p *kafka.Producer,db *gorm.DB,log *zap.Logger)gin.HandlerFunc{
 			return
 		}
 
+		msg := NotificationMessage{
+			IdempotencyKey: req.IdempotencyKey,
+			Data:           req.Data,
+		}
+
+		msgBytes, err := json.Marshal(msg)
+		if err != nil {
+			log.Error("failed to marshal message", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			return
+		}
+
 		ctx := context.Background()
+		for _, policy := range tenant.Policies {
+			for _, channel := range policy.Channels {
+				topic := "notification." + channel
+				if err := p.Publish(ctx, topic, []byte(req.EventType), msgBytes); err != nil {
+					log.Error("failed to publish message", zap.String("topic", topic), zap.Error(err))
+				}
+			}
+		}
+
+		c.JSON(http.StatusAccepted, gin.H{
+			"message": "Notification accepted",
+		})
+	}
+}
+
+func Publish(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		s := services.NewTenantService(db)
+
+		topic := c.Param("topic")
+		log.Info("Incoming HTTP request",
+			zap.String("endpoint", "/publish/"+topic),
+			zap.String("method", c.Request.Method),
+			zap.String("client_ip", c.ClientIP()),
+		)
+
+		var req NotifyRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "couldn't unmarshal JSON: " + err.Error(),
+			})
+			return
+		}
+
+		exists, err := s.CheckForValidTenant(req.ApiKey)
+		if err != nil || !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "invalid API key",
+			})
+			return
+		}
 
 		msg := NotificationMessage{
 			IdempotencyKey: req.IdempotencyKey,
 			Data:           req.Data,
 		}
 
-		for _, policy := range tenant.Policies {
-			for _, channel := range policy.Channels {
-				topic := "notification." + channel
-				msgBytes, err := json.Marshal(msg)
-				if err != nil {
-					log.Error("failed to marshal message", zap.Error(err))
-					continue
-				}
-				if err := p.Publish(ctx, topic, []byte(req.EventType), msgBytes); err != nil {
-					log.Error("failed to publish message", zap.String("topic", topic), zap.Error(err))
-				}
-			}
+		msgBytes, err := json.Marshal(msg)
+		if err != nil {
+			log.Error("failed to marshal message", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			return
 		}
+
+		ctx := context.Background()
+		if err := p.Publish(ctx, "notification."+topic, []byte(req.EventType), msgBytes); err != nil {
+			log.Error("failed to publish message", zap.String("topic", topic), zap.Error(err))
+		}
+
 		c.JSON(http.StatusAccepted, gin.H{
 			"message": "Notification accepted",
 		})
 	}
 }
+
+
