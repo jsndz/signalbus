@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -18,6 +20,10 @@ type NotifyRequest struct {
     IdempotencyKey string                 `json:"idempotency_key" binding:"required"`
 }
 
+type NotificationMessage struct {
+    IdempotencyKey string                 `json:"idempotency_key"`
+    Data           map[string]interface{} `json:"data"`
+}
 
 func Notify(p *kafka.Producer,db *gorm.DB,log *zap.Logger)gin.HandlerFunc{
 	return func(c *gin.Context) {
@@ -34,14 +40,36 @@ func Notify(p *kafka.Producer,db *gorm.DB,log *zap.Logger)gin.HandlerFunc{
 				"error": "COuldn't unmarshal JSON",
 			})
 		}
-		_ ,err :=s.GetTenantByAPIKey(req.ApiKey)
-		if err!=nil{
-			c.JSON(http.StatusAccepted, gin.H{
-				"error": err.Error(),
+				tenant, err := s.GetTenantByAPIKey(req.ApiKey)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "invalid API key",
 			})
+			return
+		}
+
+		ctx := context.Background()
+
+		msg := NotificationMessage{
+			IdempotencyKey: req.IdempotencyKey,
+			Data:           req.Data,
+		}
+
+		for _, policy := range tenant.Policies {
+			for _, channel := range policy.Channels {
+				topic := "notification." + channel
+				msgBytes, err := json.Marshal(msg)
+				if err != nil {
+					log.Error("failed to marshal message", zap.Error(err))
+					continue
+				}
+				if err := p.Publish(ctx, topic, []byte(req.EventType), msgBytes); err != nil {
+					log.Error("failed to publish message", zap.String("topic", topic), zap.Error(err))
+				}
+			}
 		}
 		c.JSON(http.StatusAccepted, gin.H{
-			"message": "Accepted",
+			"message": "Notification accepted",
 		})
 	}
 }

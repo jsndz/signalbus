@@ -72,7 +72,7 @@ func (r *TenantRepository) GetTenantByAPIKey(apiKey string) (*models.Tenant, err
     }
 
     var tenant models.Tenant
-    if err := r.db.First(&tenant, "id = ?", key.TenantID).Error; err != nil {
+    if err := r.db. Preload("Policies").First(&tenant, "id = ?", key.TenantID).Error; err != nil {
         return nil, err
     }
 
