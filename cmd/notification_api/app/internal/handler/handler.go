@@ -14,7 +14,6 @@ import (
 
 type NotifyRequest struct {
     EventType      string                 `json:"event_type" binding:"required"`
-	ApiKey			string					`json:"api_key" binding:"required"`
     Data           map[string]interface{} `json:"data" binding:"required"`
     IdempotencyKey string                 `json:"idempotency_key" binding:"required"`
 }
@@ -28,7 +27,7 @@ type NotificationMessage struct {
 func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		s := services.NewTenantService(db)
-
+		apiKey := c.GetHeader("X-API-Key")
 		log.Info("Incoming HTTP request",
 			zap.String("endpoint", "/notify"),
 			zap.String("method", c.Request.Method),
@@ -43,7 +42,7 @@ func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 			return
 		}
 
-		tenant, err := s.GetTenantByAPIKey(req.ApiKey)
+		tenant, err := s.GetTenantByAPIKey(apiKey)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "invalid API key",
@@ -82,6 +81,7 @@ func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 func Publish(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		s := services.NewTenantService(db)
+		apiKey := c.GetHeader("X-API-Key")
 
 		topic := c.Param("topic")
 		log.Info("Incoming HTTP request",
@@ -98,7 +98,7 @@ func Publish(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 			return
 		}
 
-		exists, err := s.CheckForValidTenant(req.ApiKey)
+		exists, err := s.CheckForValidTenant(apiKey)
 		if err != nil || !exists {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "invalid API key",
