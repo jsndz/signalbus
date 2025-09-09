@@ -37,3 +37,14 @@ type Policy struct {
 
     Tenant    Tenant	`gorm:"foreignKey:TenantID;constraint:OnDelete:CASCADE"`
 }
+
+type IdempotencyKey struct {
+    Key       string    `gorm:"primaryKey;size:64;index:idx_tenant_key"`
+    TenantID  uuid.UUID `gorm:"type:uuid;not null;index:idx_tenant_key"`
+    RequestHash string  `gorm:"not null"`
+    Response   string   `gorm:"type:jsonb"` 
+    StatusCode int      `gorm:"not null"`
+    CreatedAt  time.Time `gorm:"autoCreateTime"`
+
+    Tenant    Tenant `gorm:"foreignKey:TenantID;constraint:OnDelete:CASCADE"`
+}

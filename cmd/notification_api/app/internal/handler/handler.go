@@ -6,6 +6,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/jsndz/signalbus/cmd/notification_api/app/internal/models"
 	"github.com/jsndz/signalbus/cmd/notification_api/app/internal/services"
 	"github.com/jsndz/signalbus/pkg/kafka"
 	"go.uber.org/zap"
@@ -49,7 +51,11 @@ func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 			})
 			return
 		}
-
+		var record models.IdempotencyKey
+		if err := db.First(&record, "key = ?", req.IdempotencyKey).Error; err == nil {
+			c.Data(record.StatusCode, "application/json", []byte(record.Response))
+			return
+		}
 		msg := NotificationMessage{
 			IdempotencyKey: req.IdempotencyKey,
 			Data:           req.Data,
@@ -71,7 +77,15 @@ func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 				}
 			}
 		}
-
+		resp := gin.H{"message": "Notification accepted"}
+		respBytes, _ := json.Marshal(resp)
+		db.Create(&models.IdempotencyKey{
+			Key:        	req.IdempotencyKey,
+			TenantID:  	 	tenant.ID,
+			RequestHash: 	string(msgBytes),
+			Response:   	string(respBytes),
+			StatusCode: 	http.StatusAccepted,
+		})
 		c.JSON(http.StatusAccepted, gin.H{
 			"message": "Notification accepted",
 		})
@@ -98,14 +112,18 @@ func Publish(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 			return
 		}
 
-		exists, err := s.CheckForValidTenant(apiKey)
-		if err != nil || !exists {
+		tenantID, err := s.CheckForValidTenant(apiKey)
+		if err != nil ||  tenantID == uuid.Nil{
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "invalid API key",
 			})
 			return
 		}
-
+		var record models.IdempotencyKey
+		if err := db.First(&record, "key = ?", req.IdempotencyKey).Error; err == nil {
+			c.Data(record.StatusCode, "application/json", []byte(record.Response))
+			return
+		}
 		msg := NotificationMessage{
 			IdempotencyKey: req.IdempotencyKey,
 			Data:           req.Data,
@@ -122,7 +140,16 @@ func Publish(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 		if err := p.Publish(ctx, "notification."+topic, []byte(req.EventType), msgBytes); err != nil {
 			log.Error("failed to publish message", zap.String("topic", topic), zap.Error(err))
 		}
+		resp := gin.H{"message": "Notification accepted"}
+		respBytes, _ := json.Marshal(resp)
 
+		db.Create(&models.IdempotencyKey{
+			Key:        	req.IdempotencyKey,
+			TenantID:  	 	tenantID,
+			RequestHash: 	string(msgBytes),
+			Response:   	string(respBytes),
+			StatusCode: 	http.StatusAccepted,
+		})
 		c.JSON(http.StatusAccepted, gin.H{
 			"message": "Notification accepted",
 		})

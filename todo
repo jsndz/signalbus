@@ -445,7 +445,7 @@ Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship af
 - [ ] API key auth, 
 - [x] short term rate limit middleware.
 - [ ] long term rate limit middleware.
-- [ ] Idempotency keys (DB unique index + cache).
+- [x] Idempotency keys (DB unique index + cache).
 - [ ] OpenAPI spec + Swagger UI.
 - [ ] Idempotent Kafka producer keyed by user.
 

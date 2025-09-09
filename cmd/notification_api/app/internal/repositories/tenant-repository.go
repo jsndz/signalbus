@@ -74,20 +74,20 @@ func (r *TenantRepository) GetTenantByAPIKey(apiKey string) (*models.Tenant, err
     }
 
     var tenant models.Tenant
-    if err := r.db. Preload("Policies").First(&tenant, "id = ?", key.TenantID).Error; err != nil {
+    if err := r.db.Preload("Policies").First(&tenant, "id = ?", key.TenantID).Error; err != nil {
         return nil, err
     }
     return &tenant, nil
 }
 
 
-func (r *TenantRepository) CheckIfTenantExist(apiKey string) (bool, error) {
+func (r *TenantRepository) CheckIfTenantExist(apiKey string) (uuid.UUID, error) {
 	var key models.APIKey
 	if err := r.db.Where("hash = ?", apiKey).First(&key).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return false, nil
+			return uuid.Nil, nil
 		}
-		return false, err
+		return uuid.Nil, err
 	}
-	return true, nil
+	return key.TenantID, nil
 }
