@@ -22,6 +22,7 @@ func NewProducer(brokers []string) *Producer{
 		&kafka.Writer{
 			Addr:     kafka.TCP(brokers...),
 			Balancer: &kafka.LeastBytes{},
+			
 		},
 	}
 	

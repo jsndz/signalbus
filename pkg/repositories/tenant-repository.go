@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"github.com/google/uuid"
-	"github.com/jsndz/signalbus/cmd/notification_api/app/internal/models"
+	"github.com/jsndz/signalbus/pkg/models"
 	"gorm.io/gorm"
 )
 

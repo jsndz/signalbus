@@ -7,9 +7,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/jsndz/signalbus/cmd/notification_api/app/internal/models"
 	"github.com/jsndz/signalbus/cmd/notification_api/app/internal/services"
 	"github.com/jsndz/signalbus/pkg/kafka"
+	"github.com/jsndz/signalbus/pkg/models"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )

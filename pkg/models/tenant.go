@@ -47,4 +47,19 @@ type IdempotencyKey struct {
     CreatedAt  time.Time `gorm:"autoCreateTime"`
 
     Tenant    Tenant `gorm:"foreignKey:TenantID;constraint:OnDelete:CASCADE"`
+
+}
+
+
+type Template struct {
+    ID        uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+    TenantID  uuid.UUID `gorm:"type:uuid;not null;index"`
+    Channel   string    `gorm:"size:50;not null"`
+    Name      string    `gorm:"size:100;not null;index:idx_tenant_name_version,unique"`
+    Version   int       `gorm:"not null;index:idx_tenant_name_version,unique"`
+    Engine    string    `gorm:"size:50;not null"`
+    Content   string    `gorm:"type:text;not null"`
+    CreatedAt time.Time `gorm:"autoCreateTime"`
+
+    Tenant Tenant `gorm:"foreignKey:TenantID;constraint:OnDelete:CASCADE"`
 }
