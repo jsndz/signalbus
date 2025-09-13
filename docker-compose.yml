@@ -89,6 +89,20 @@ services:
       - tenant-data:/var/lib/postgresql/data
     restart: unless-stopped
 
+  template-db:
+    image: postgres:15
+    container_name: template-db
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: signal_bus
+      POSTGRES_DB: template
+    volumes:
+      - tenant-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
 volumes:
   grafana-storage:
   tenant-data:
+  template-data:

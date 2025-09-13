@@ -23,6 +23,8 @@ type NotifyRequest struct {
 type NotificationMessage struct {
     IdempotencyKey string                 `json:"idempotency_key"`
     Data           map[string]interface{} `json:"data"`
+	TenantID	   uuid.UUID				`json:"tenant_id"`
+	
 }
 
 
@@ -59,6 +61,8 @@ func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 		msg := NotificationMessage{
 			IdempotencyKey: req.IdempotencyKey,
 			Data:           req.Data,
+			TenantID:		tenant.ID,
+
 		}
 
 		msgBytes, err := json.Marshal(msg)

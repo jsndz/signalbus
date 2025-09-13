@@ -46,7 +46,6 @@ func (r *TemplateRepository) List(tenantID uuid.UUID) ([]models.Template, error)
 }
 
 func (r *TemplateRepository) Update(template *models.Template) error {
-	// Ensure the record exists
 	if template.ID == uuid.Nil {
 		return errors.New("invalid template ID")
 	}
@@ -55,4 +54,17 @@ func (r *TemplateRepository) Update(template *models.Template) error {
 
 func (r *TemplateRepository) Delete(id uuid.UUID) error {
 	return r.db.Delete(&models.Template{}, "id = ?", id).Error
+}
+
+func (r *TemplateRepository) GetByLookup(tenantID uuid.UUID, channel, name, locale, contentType string) (*models.Template, error) {
+	var template models.Template
+	err := r.db.Where(
+		"tenant_id = ? AND channel = ? AND name = ? AND locale = ? AND content_type = ?",
+		tenantID, channel, name, locale, contentType,
+	).First(&template).Error
+
+	if err != nil {
+		return nil, err
+	}
+	return &template, nil
 }

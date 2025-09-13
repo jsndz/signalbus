@@ -10,6 +10,7 @@ import (
 	"github.com/jsndz/signalbus/metrics"
 	"github.com/jsndz/signalbus/pkg/gosms"
 	"github.com/jsndz/signalbus/pkg/kafka"
+	"github.com/jsndz/signalbus/pkg/repositories"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
@@ -18,8 +19,7 @@ const maxRetries = 3
 
 
 
-
-func  HandleSMS(broker string, ctx context.Context, smsService gosms.Sender, logger *zap.Logger)  {
+func  HandleSMS(broker string, ctx context.Context, smsService gosms.Sender, logger *zap.Logger,tmpl *repositories.TemplateRepository)  {
 	topic:= "notification.sms"
 	c := kafka.NewConsumerFromEnv(topic,"sms")
 	defer c.Close()
@@ -43,6 +43,7 @@ func  HandleSMS(broker string, ctx context.Context, smsService gosms.Sender, log
 				zap.Int64("offset", m.Offset),
 			)
 			var messageBody gosms.SMS
+			
 			if err:= json.Unmarshal(m.Value,&messageBody); err!=nil{
 				logger.Error("Failed to unmarshal signup message",
 					zap.ByteString("raw", m.Value),

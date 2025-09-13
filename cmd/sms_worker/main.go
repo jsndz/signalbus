@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jsndz/signalbus/cmd/sms_worker/service"
@@ -10,6 +11,8 @@ import (
 	"github.com/jsndz/signalbus/metrics"
 	"github.com/jsndz/signalbus/middlewares"
 	"github.com/jsndz/signalbus/pkg/config"
+	"github.com/jsndz/signalbus/pkg/database"
+	"github.com/jsndz/signalbus/pkg/repositories"
 	"github.com/jsndz/signalbus/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
@@ -24,6 +27,12 @@ type SignupRequest struct {
 
 func main() {
 	log, err := logger.InitLogger()
+	dns := os.Getenv("TENANT_DB")
+	db,err := database.InitDB(dns)
+	tmpl_repo := repositories.NewTemplateRepository(db)
+	if err != nil {
+		panic("DB not init  " + err.Error())
+	}
 	if err != nil {
 		panic("failed to initialize logger: " + err.Error())
 	}
@@ -45,8 +54,6 @@ func main() {
 		ctx.JSON(http.StatusAccepted, gin.H{"message": "ok"})
 	})
 
-	
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cfg ,err := config.LoadConfig("./config.yaml")
@@ -58,7 +65,7 @@ func main() {
 		log.Fatal(err.Error(), zap.Error(err))
 	}
 	log.Info("Mail service initialized")
-	go service.HandleSMS(broker, ctx, Sender, log)
+	go service.HandleSMS(broker, ctx, Sender, log,tmpl_repo)
 
 
 	if err := router.Run(":3000"); err != nil {

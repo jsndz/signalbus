@@ -21,7 +21,7 @@ import (
 
 func main() {
 	broker := utils.GetEnv("KAFKA_BROKER")
-	dns := os.Getenv("DB_DNS")
+	dns := os.Getenv("TENANT_DB")
 	db,err := database.InitDB(dns)
 	if err != nil {
 		panic("DB not init  " + err.Error())
