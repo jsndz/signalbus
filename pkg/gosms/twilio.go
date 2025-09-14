@@ -34,7 +34,6 @@ func NewTwilioSender(accountSid,authToken,fromNumber string) *TwilioSender {
 }
 
 func (t *TwilioSender) Send(s SMS) error {
-
 	params := &api.CreateMessageParams{}
 	params.SetBody(s.Text)
 	params.SetFrom(t.FromNumber)

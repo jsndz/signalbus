@@ -33,6 +33,7 @@ type Policy struct {
     TenantID  uuid.UUID `gorm:"type:uuid;not null;index"`
     Topic     string    `gorm:"size:100;not null"`
     Channels  []string  `gorm:"type:text[];not null"`
+    Locale    string `gorm:"size:100;not null"`
     CreatedAt time.Time `gorm:"autoCreateTime"`
 
     Tenant    Tenant	`gorm:"foreignKey:TenantID;constraint:OnDelete:CASCADE"`
