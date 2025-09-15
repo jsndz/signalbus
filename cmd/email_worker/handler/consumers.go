@@ -11,13 +11,16 @@ import (
 	"github.com/jsndz/signalbus/metrics"
 	"github.com/jsndz/signalbus/pkg/gomailer"
 	"github.com/jsndz/signalbus/pkg/kafka"
+	"github.com/jsndz/signalbus/pkg/repositories"
+	"github.com/jsndz/signalbus/pkg/templates"
+	"github.com/jsndz/signalbus/pkg/types"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
 const maxRetries = 3
 
-func HandleMail(broker string, ctx context.Context, mailService gomailer.Mailer, logger *zap.Logger) {
+func HandleMail(broker string, ctx context.Context, mailService gomailer.Mailer, logger *zap.Logger,tmplRepo *repositories.TemplateRepository) {
 	topic := "notification.email"
 	c := kafka.NewConsumerFromEnv(topic,"email")
 	defer c.Close()
@@ -36,25 +39,46 @@ func HandleMail(broker string, ctx context.Context, mailService gomailer.Mailer,
 				logger.Error("Error reading Kafka message", zap.String("topic", topic), zap.Error(err))
 				continue
 			}
-
+			var msg types.KafkaStreamData
+            if err := json.Unmarshal(m.Value, &msg); err != nil {
+                logger.Error("Failed to unmarshal SMS message",
+                    zap.ByteString("raw", m.Value),
+                    zap.Error(err),
+                )
+                continue
+            }
+			content ,err := templates.Render(msg.RecieverData,msg.GetTemplateData.TenantID.String(),msg.GetTemplateData.EventType,string(m.Key),msg.GetTemplateData.Locale,[]string{"html","text"},tmplRepo)
+			if err != nil {
+				logger.Error("Coudn't Render template",
+					zap.Any("recieverData", msg.RecieverData),
+					zap.Error(err),
+				)
+				continue
+			}
 			logger.Info("Kafka message received",
 				zap.String("topic", topic),
 				zap.ByteString("key", m.Key),
 				zap.Int64("offset", m.Offset),
 			)
-
-			var messageBody gomailer.Email
-			err = json.Unmarshal(m.Value, &messageBody)
+			var user gomailer.Email
+			recieverDataBytes, err := json.Marshal(msg.RecieverData)
 			if err != nil {
-				logger.Error("Failed to unmarshal signup message",
-					zap.ByteString("raw", m.Value),
+				logger.Error("Failed to marshal RecieverData",
+					zap.Any("recieverData", msg.RecieverData),
 					zap.Error(err),
 				)
 				continue
 			}
-			mail := gomailer.NewEmail(messageBody.From,messageBody.To,
-				gomailer.WithHTML(messageBody.HTML),gomailer.WithText(messageBody.Text),
-				gomailer.WithSubject(messageBody.Subject))
+				if err := json.Unmarshal(recieverDataBytes, &user); err != nil {
+				logger.Error("Failed to unmarshal SMS user",
+					zap.ByteString("raw", recieverDataBytes),
+					zap.Error(err),
+				)
+				continue
+			}
+			mail := gomailer.NewEmail(user.From,user.To,
+				gomailer.WithHTML(string(content["html"])),gomailer.WithText(string(content["text"])),
+				gomailer.WithSubject(user.Subject))
 
 			SendEmailWithRetry(logger,mailService,mail);
 		}

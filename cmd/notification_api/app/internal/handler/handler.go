@@ -12,43 +12,12 @@ import (
 	"github.com/jsndz/signalbus/cmd/notification_api/app/internal/services"
 	"github.com/jsndz/signalbus/pkg/kafka"
 	"github.com/jsndz/signalbus/pkg/models"
+	"github.com/jsndz/signalbus/pkg/types"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
-type NotifyRequest struct {
-	EventType      string                 `json:"event_type" binding:"required"`
-	UserData       map[string]interface{} `json:"data" binding:"required"`
-	TemplateData   map[string]interface{} `json:"template_data,omitempty"`
-	IdempotencyKey string                 `json:"idempotency_key" binding:"required"`
-}
 
-type KafkaStreamData struct {
-	GetTemplateData *GetTemplateData       `json:"get_template_data"`
-	InTemplateData  map[string]interface{} `json:"in_template_data,omitempty"`
-	RecieverData    map[string]interface{} `json:"reciever_data,omitempty"`
-	IdempotencyKey  string                 `json:"idempotency_key"`
-}
-
-type GetTemplateData struct {
-	EventType string    `json:"event_type"`
-	Locale    string    `json:"locale"`
-	TenantID  uuid.UUID `json:"tenant_id"`
-}
-
-type PublishMessage struct {
-	IdempotencyKey string `json:"idempotency_key"`
-	Content        string `json:"content"`
-}
-
-type PublishRequest struct {
-	IdempotencyKey string `json:"idempotency_key"`
-	Message        string `json:"message"`
-}
-
-// Notify handler:
-// - finds policies that match req.EventType
-// - produces one message per recipient (or single message if no recipients present)
 func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		s := services.NewTenantService(db)
@@ -60,7 +29,7 @@ func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 			zap.String("client_ip", c.ClientIP()),
 		)
 
-		var req NotifyRequest
+		var req types.NotifyRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": "couldn't unmarshal JSON: " + err.Error(),
@@ -119,11 +88,11 @@ func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 			for _, channel := range policy.Channels {
 				topic := "notification." + channel
 				for _, pl := range payloads {
-					msg := KafkaStreamData{
+					msg := types.KafkaStreamData{
 						IdempotencyKey: req.IdempotencyKey,
 						RecieverData:   pl.RecieverData,
 						InTemplateData: pl.InTemplateData,
-						GetTemplateData: &GetTemplateData{
+						GetTemplateData: &types.GetTemplateData{
 							EventType: req.EventType,
 							Locale:    locale,
 							TenantID:  tenant.ID,
@@ -180,7 +149,7 @@ func Publish(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 			zap.String("client_ip", c.ClientIP()),
 		)
 
-		var req PublishRequest
+		var req types.PublishRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": "couldn't unmarshal JSON: " + err.Error(),
@@ -202,7 +171,7 @@ func Publish(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 			return
 		}
 
-		msg := PublishMessage{
+		msg := types.PublishMessage{
 			IdempotencyKey: req.IdempotencyKey,
 			Content:        req.Message,
 		}
@@ -214,7 +183,7 @@ func Publish(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 		}
 
 		ctx := context.Background()
-		if err := p.Publish(ctx, "notification."+topicParam, []byte(tenantID.String()), msgBytes); err != nil {
+		if err := p.Publish(ctx, "notification." + topicParam, []byte(tenantID.String()), msgBytes); err != nil {
 			log.Error("failed to publish message", zap.String("topic", topicParam), zap.Error(err))
 		}
 
