@@ -3,40 +3,49 @@ package main
 import (
 	"context"
 	"net/http"
+	"os"
 
-	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"github.com/jsndz/signalbus/cmd/email_worker/handler"
 	"github.com/jsndz/signalbus/logger"
 	"github.com/jsndz/signalbus/metrics"
 	"github.com/jsndz/signalbus/middlewares"
 	"github.com/jsndz/signalbus/pkg/config"
+	"github.com/jsndz/signalbus/pkg/database"
+	"github.com/jsndz/signalbus/pkg/repositories"
 	"github.com/jsndz/signalbus/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 )
 
 func main() {
-	log, err := logger.InitLogger()
+	_ = godotenv.Load()
+	
+	logr, err := logger.InitLogger()
 	if err != nil {
 		panic("failed to initialize zap logger: " + err.Error())
 	}
-	defer log.Sync()
+	defer logr.Sync()
+	dns := os.Getenv("TENANT_DB")
+	db,err := database.InitDB(dns)
+	if err != nil {
+		panic("failed to initialize Database: " + err.Error())
+	}
+	tmpl_repo := repositories.NewTemplateRepository(db)
 
-	log.Info("Starting email worker service")
+	logr.Info("Starting email worker service")
 
 	broker := utils.GetEnv("KAFKA_BROKER")
-	log.Info("Kafka broker resolved", zap.String("broker", broker))
+	logr.Info("Kafka broker resolved", zap.String("broker", broker))
 
 	metrics.InitEmailMetrics()
 
-	router := gin.New()
-	router.Use(gin.Recovery())
-	router.Use(middlewares.MetricsMiddleware())
-
-	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
-	router.GET("/health", func(ctx *gin.Context) {
-		log.Info("Health check hit")
-		ctx.JSON(http.StatusAccepted, gin.H{"message": "ok"})
+	mux :=  http.NewServeMux()
+	
+	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -45,17 +54,18 @@ func main() {
 	cfg ,err := config.LoadConfig("./config.yaml")
 	
 	if err!=nil {
-		log.Fatal(err.Error(), zap.Error(err))
+		logr.Fatal(err.Error(), zap.Error(err))
 	}
 	Mailer,err := config.BuildMailer(cfg)
 	if err!=nil {
-		log.Fatal(err.Error(), zap.Error(err))
+		logr.Fatal(err.Error(), zap.Error(err))
 	}
-	log.Info("Mail service initialized")
+	logr.Info("Mail service initialized")
 
-	go handler.HandleMail(broker, ctx, Mailer, log)
+	go handler.HandleMail(broker, ctx, Mailer, logr, tmpl_repo)
+	wrappedMux := middlewares.MetricsMiddleware(mux)
 
-	if err := router.Run(":3001"); err != nil {
-		log.Fatal("Failed to start HTTP server", zap.Error(err))
+	if err := http.ListenAndServe(":3001", wrappedMux); err != nil {
+		logr.Fatal("metrics server failed", zap.Error(err))
 	}
 }

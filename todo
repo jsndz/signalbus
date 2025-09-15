@@ -458,7 +458,7 @@ Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship af
 
 ### Phase 5 — Templates & prefs
 
-- [ ] Template storage; engines (Go tmpl + MJML pipeline).
+- [x] Template storage; engines (Go tmpl + MJML pipeline).
 - [ ] Localization field and selection.
 - [ ] Opt-out table and DND windows (tz aware).
 - [ ] Policy engine (topic → channels, honoring prefs).

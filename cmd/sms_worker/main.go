@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"github.com/jsndz/signalbus/cmd/sms_worker/service"
 	"github.com/jsndz/signalbus/logger"
 	"github.com/jsndz/signalbus/metrics"
@@ -18,57 +18,53 @@ import (
 	"go.uber.org/zap"
 )
 
-type SignupRequest struct {
-	Username string `json:"username" binding:"required,min=3"`
-	Email    string `json:"email" binding:"required"`
-	Password string `json:"password" binding:"required"`
-	Phone    string `json:"phone" binding:"required"`
-}
-
 func main() {
-	log, err := logger.InitLogger()
-	dns := os.Getenv("TENANT_DB")
-	db,err := database.InitDB(dns)
-	tmpl_repo := repositories.NewTemplateRepository(db)
-	if err != nil {
-		panic("DB not init  " + err.Error())
-	}
+	_ = godotenv.Load()
+
+	logr, err := logger.InitLogger()
 	if err != nil {
 		panic("failed to initialize logger: " + err.Error())
 	}
-	defer log.Sync()
+	defer logr.Sync()
 
-	log.Info("Starting SMS worker")
+	dsn := os.Getenv("TENANT_DB")
+	db, err := database.InitDB(dsn)
+	if err != nil {
+		panic("failed to initialize Database: " + err.Error())
+	}
+	tmplRepo := repositories.NewTemplateRepository(db)
+
+	logr.Info("Starting SMS worker")
 
 	broker := utils.GetEnv("KAFKA_BROKER")
-	log.Info("Kafka broker loaded", zap.String("broker", broker))
+	logr.Info("Kafka broker loaded", zap.String("broker", broker))
 
 	metrics.InitSMSMetrics()
-	router := gin.New()
-	router.Use(gin.Recovery())
-	router.Use(middlewares.MetricsMiddleware())
 
-	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
-	router.GET("/health", func(ctx *gin.Context) {
-		log.Info("Health check hit")
-		ctx.JSON(http.StatusAccepted, gin.H{"message": "ok"})
-	})
+	cfg, err := config.LoadConfig("./config.yaml")
+	if err != nil {
+		logr.Fatal("failed to load config", zap.Error(err))
+	}
+	sender, err := config.BuildSender(cfg)
+	if err != nil {
+		logr.Fatal("failed to init sender", zap.Error(err))
+	}
+	logr.Info("SMS sender initialized")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cfg ,err := config.LoadConfig("./config.yaml")
-	if err!=nil {
-		log.Fatal(err.Error(), zap.Error(err))
-	}
-	Sender,err := config.BuildSender(cfg)
-	if err!=nil {
-		log.Fatal(err.Error(), zap.Error(err))
-	}
-	log.Info("Mail service initialized")
-	go service.HandleSMS(broker, ctx, Sender, log,tmpl_repo)
+	go service.HandleSMS(broker, ctx, sender, logr, tmplRepo)
 
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	})
 
-	if err := router.Run(":3000"); err != nil {
-		log.Fatal("Failed to start HTTP server", zap.Error(err))
+	wrappedMux := middlewares.MetricsMiddleware(mux)
+
+	if err := http.ListenAndServe(":3001", wrappedMux); err != nil {
+		logr.Fatal("metrics server failed", zap.Error(err))
 	}
 }

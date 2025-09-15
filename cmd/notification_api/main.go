@@ -1,12 +1,14 @@
 package main
 
 import (
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 
@@ -20,6 +22,10 @@ import (
 )
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("No .env file found, using system env")
+	}
 	broker := utils.GetEnv("KAFKA_BROKER")
 	dns := os.Getenv("TENANT_DB")
 	db,err := database.InitDB(dns)
@@ -37,7 +43,7 @@ func main() {
 	log.Info("Kafka producer initialized", zap.String("broker", broker))
 
 	router := gin.Default()
-	router.Use(middlewares.MetricsMiddleware())
+	router.Use(middlewares.GinMetricsMiddleware())
 
 	router.GET("/health", func(ctx *gin.Context) {
 		ctx.JSON(http.StatusAccepted, gin.H{"message": "ok"})
@@ -50,7 +56,7 @@ func main() {
 	routes.Tenants(v1.Group("/tenants"),db,log)
 	go handleShutdown(producer, log)
 
-	if err := router.Run(); err != nil {
+	if err := router.Run(":3000"); err != nil {
 		log.Fatal("Failed to start server", zap.Error(err))
 	}
 }
