@@ -26,7 +26,7 @@ func main() {
 		panic("failed to initialize zap logger: " + err.Error())
 	}
 	defer logr.Sync()
-	dns := os.Getenv("TENANT_DB")
+	dns := os.Getenv("TEMPLATE_DB")
 	db,err := database.InitDB(dns)
 	if err != nil {
 		panic("failed to initialize Database: " + err.Error())

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -50,6 +51,11 @@ func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 			c.Data(record.StatusCode, "application/json", []byte(record.Response))
 			return
 		}
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+		} else if err != nil {
+			log.Error("failed to query idempotency key", zap.Error(err))
+		}
+
 
 		reqBytes, _ := json.Marshal(struct {
 			EventType    string                 `json:"event_type"`

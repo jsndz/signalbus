@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -51,6 +52,7 @@ func BuildMailer(cfg *Config) (gomailer.Mailer, error) {
 			Username: cfg.Email.SMTP.Username,
 			Password: cfg.Email.SMTP.Password,
 			UseAuth:  cfg.Email.SMTP.UseAuth,
+			Ctx: 		context.Background(),
 		}, nil
 
 	case "sendgrid":

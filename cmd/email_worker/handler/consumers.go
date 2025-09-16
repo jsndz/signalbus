@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"strings"
 	"time"
@@ -47,7 +48,8 @@ func HandleMail(broker string, ctx context.Context, mailService gomailer.Mailer,
                 )
                 continue
             }
-			content ,err := templates.Render(msg.RecieverData,msg.GetTemplateData.TenantID.String(),msg.GetTemplateData.EventType,string(m.Key),msg.GetTemplateData.Locale,[]string{"html","text"},tmplRepo)
+			log.Println(msg)
+			content ,err := templates.Render(msg.InTemplateData,msg.GetTemplateData.TenantID.String(),"email",msg.GetTemplateData.EventType,msg.GetTemplateData.Locale,[]string{"html","text"},tmplRepo)
 			if err != nil {
 				logger.Error("Coudn't Render template",
 					zap.Any("recieverData", msg.RecieverData),
@@ -69,12 +71,12 @@ func HandleMail(broker string, ctx context.Context, mailService gomailer.Mailer,
 				)
 				continue
 			}
-				if err := json.Unmarshal(recieverDataBytes, &user); err != nil {
-				logger.Error("Failed to unmarshal SMS user",
-					zap.ByteString("raw", recieverDataBytes),
-					zap.Error(err),
-				)
-				continue
+			if err := json.Unmarshal(recieverDataBytes, &user); err != nil {
+				logger.Error("Failed to unmarshal mail user",
+				zap.ByteString("raw", recieverDataBytes),
+				zap.Error(err),
+			)
+			continue
 			}
 			mail := gomailer.NewEmail(user.From,user.To,
 				gomailer.WithHTML(string(content["html"])),gomailer.WithText(string(content["text"])),

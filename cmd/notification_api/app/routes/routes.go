@@ -9,7 +9,7 @@ import (
 )
 
 func Notifications(router *gin.RouterGroup,p *kafka.Producer,db *gorm.DB,log *zap.Logger ){
-	router.GET("/notify",handler.Notify(p,db,log))
+	router.POST("/",handler.Notify(p,db,log))
 }
 
 
