@@ -40,7 +40,6 @@ func (r *TenantRepository) DeleteTenant(id uuid.UUID) error {
 	return r.db.Delete(&models.Tenant{}, "id = ?", id).Error
 }
 
-// API Keys
 func (r *TenantRepository) CreateAPIKey(apiKey *models.APIKey) error {
 	return r.db.Create(apiKey).Error
 }
@@ -53,7 +52,6 @@ func (r *TenantRepository) GetAPIKeyByHash(hash string) (*models.APIKey, error) 
 	return &apiKey, nil
 }
 
-// Policies
 func (r *TenantRepository) CreatePolicy(policy *models.Policy) error {
 	return r.db.Create(policy).Error
 }

@@ -99,7 +99,7 @@ services:
       POSTGRES_PASSWORD: signal_bus
       POSTGRES_DB: template
     volumes:
-      - tenant-data:/var/lib/postgresql/data
+      - template-data:/var/lib/postgresql/data
     restart: unless-stopped
 
 volumes:

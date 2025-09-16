@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 type Tenant struct {
@@ -22,7 +23,7 @@ type APIKey struct {
     ID        uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
     TenantID  uuid.UUID `gorm:"type:uuid;not null;index"`
     Hash      string    `gorm:"not null;uniqueIndex"`
-    Scopes    []string  `gorm:"type:text[]"`
+    Scopes    pq.StringArray `gorm:"type:text[]" json:"scopes"`
     CreatedAt time.Time `gorm:"autoCreateTime"`
 
     Tenant    Tenant     `gorm:"foreignKey:TenantID;constraint:OnDelete:CASCADE"`
@@ -32,7 +33,7 @@ type Policy struct {
     ID        uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
     TenantID  uuid.UUID `gorm:"type:uuid;not null;index"`
     Topic     string    `gorm:"size:100;not null"`
-    Channels  []string  `gorm:"type:text[];not null"`
+    Channels  pq.StringArray  `gorm:"type:text[];not null"`
     Locale    string `gorm:"size:100;not null"`
     CreatedAt time.Time `gorm:"autoCreateTime"`
 

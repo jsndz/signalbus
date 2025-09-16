@@ -15,10 +15,10 @@ func Notifications(router *gin.RouterGroup,p *kafka.Producer,db *gorm.DB,log *za
 
 func Tenants(r *gin.RouterGroup,db *gorm.DB,log *zap.Logger ){
 	tenantHandler :=handler.NewTenantHandler(db)
-	r.POST("/tenants", tenantHandler.CreateTenant)
-	r.GET("/tenants", tenantHandler.ListTenants)
-	r.GET("/tenants/:id", tenantHandler.GetTenant)
-	r.DELETE("/tenants/:id", tenantHandler.DeleteTenant)
+	r.POST("/", tenantHandler.CreateTenant)
+	r.GET("/", tenantHandler.ListTenants)
+	r.GET("/:id", tenantHandler.GetTenant)
+	r.DELETE("/:id", tenantHandler.DeleteTenant)
 	r.POST("/policies", tenantHandler.CreatePolicy)
 }
 
@@ -31,4 +31,21 @@ func Templates(r *gin.RouterGroup,db *gorm.DB,log *zap.Logger ){
 	r.GET("/", templateHandler.ListTemplates)
 	r.PUT("/:id", templateHandler.UpdateTemplate)
 	r.DELETE("/:id", templateHandler.DeleteTemplate)
+}
+
+func APIKeys(r *gin.RouterGroup, db *gorm.DB, log *zap.Logger) {
+	apiKeyHandler := handler.NewAPIKeyHandler(db)
+
+	r.POST("/", apiKeyHandler.CreateAPIKey)
+	r.GET("/", apiKeyHandler.ListAPIKeys)
+	r.DELETE("/:id", apiKeyHandler.DeleteAPIKey)
+}
+
+
+func Policies(r *gin.RouterGroup, db *gorm.DB, log *zap.Logger) {
+	policyHandler := handler.NewPolicyHandler(db)
+
+	r.POST("/", policyHandler.CreatePolicy)
+	r.GET("/", policyHandler.ListPolicies)
+	r.DELETE("/:id", policyHandler.DeletePolicy)
 }
