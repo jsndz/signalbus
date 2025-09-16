@@ -21,3 +21,14 @@ func Tenants(r *gin.RouterGroup,db *gorm.DB,log *zap.Logger ){
 	r.DELETE("/tenants/:id", tenantHandler.DeleteTenant)
 	r.POST("/policies", tenantHandler.CreatePolicy)
 }
+
+
+
+func Templates(r *gin.RouterGroup,db *gorm.DB,log *zap.Logger ){
+	templateHandler :=handler.NewTemplateHandler(db)
+	r.POST("/", templateHandler.CreateTemplate)
+	r.GET("/:id", templateHandler.GetTemplateByID)
+	r.GET("/", templateHandler.ListTemplates)
+	r.PUT("/:id", templateHandler.UpdateTemplate)
+	r.DELETE("/:id", templateHandler.DeleteTemplate)
+}

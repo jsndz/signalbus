@@ -64,7 +64,7 @@ func main() {
 
 	wrappedMux := middlewares.MetricsMiddleware(mux)
 
-	if err := http.ListenAndServe(":3001", wrappedMux); err != nil {
+	if err := http.ListenAndServe(":3003", wrappedMux); err != nil {
 		logr.Fatal("metrics server failed", zap.Error(err))
 	}
 }

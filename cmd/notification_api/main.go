@@ -54,8 +54,8 @@ func main() {
 	v1 := router.Group("/api")
 	routes.Notifications(v1.Group("/notify"), producer,db, log)
 	routes.Tenants(v1.Group("/tenants"),db,log)
+	routes.Templates(v1.Group("/templates"),db,log)
 	go handleShutdown(producer, log)
-
 	if err := router.Run(":3000"); err != nil {
 		log.Fatal("Failed to start server", zap.Error(err))
 	}

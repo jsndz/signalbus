@@ -442,7 +442,7 @@ Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship af
 ### Phase 3 — API
 
 - [x] `/publish/:topic` and `/notify` (policy fan-out).
-- [ ] API key auth, 
+- [ ] API key auth
 - [x] short term rate limit middleware.
 - [ ] long term rate limit middleware.
 - [x] Idempotency keys (DB unique index + cache).
