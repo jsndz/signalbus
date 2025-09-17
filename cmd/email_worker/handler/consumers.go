@@ -115,16 +115,12 @@ func SendEmailWithRetry(Logger *zap.Logger,mailService gomailer.Mailer,mail goma
 		time.Sleep(waitTime)
 	}
 
-	err := fmt.Errorf("SendMail failed after %d retries", maxRetries)
-	if err == nil {
-		return nil
-	}
 	metrics.ExternalAPIFailure.WithLabelValues("sendgrid", "email_worker").Inc()
 
 	Logger.Error("Permanent email failure - sending it to DLQ",
 		zap.String("to", strings.Join(mail.To, ",")),
 		zap.String("subject", mail.Subject),
-		zap.String("reason", "max_retries_exceeded"),
+		zap.String("reason", fmt.Sprintf("SendMail failed after %d retries", maxRetries)),
 	)
 	mailBytes, err := json.Marshal(mail)
 	if err != nil {
@@ -135,6 +131,6 @@ func SendEmailWithRetry(Logger *zap.Logger,mailService gomailer.Mailer,mail goma
 		)
 		return err
 	}
-	producer.Publish(context.Background(), "notification.sms.dlq", []byte(mail.IdempotencyKey), mailBytes)
+	producer.Publish(context.Background(), "notification.email.dlq", []byte(mail.IdempotencyKey), mailBytes)
 	return err
 }

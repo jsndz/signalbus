@@ -1,4 +1,4 @@
-Version 1:
+# Version 1:
 
 ## **Phase 1: Go, REST APIs & Docker (Days 1–5)**
 
@@ -87,7 +87,7 @@ Version 1:
 - [ ] Scale Kafka consumers by running multiple worker replicas in Docker Compose
 - [ ] (Optional) Add tracing across services using OpenTelemetry & Jaeger
 
-Version 2:
+# Version 2:
 
 Awesome—let’s turn this into a **learn-and-build roadmap** for an OSS, self-hostable notification platform (Signalbus++), plus the two reusable libraries you want (`gomailer` and `gosms`). It’s structured so you **learn a concept, then immediately build the thing that uses it**. I’ve included detailed checklists you can literally check off as you go.
 
@@ -442,16 +442,16 @@ Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship af
 ### Phase 3 — API
 
 - [x] `/publish/:topic` and `/notify` (policy fan-out).
-- [ ] API key auth
+- [x] API key auth
 - [x] short term rate limit middleware.
 - [ ] long term rate limit middleware.
 - [x] Idempotency keys (DB unique index + cache).
 - [ ] OpenAPI spec + Swagger UI.
-- [ ] Idempotent Kafka producer keyed by user.
+- [x] Idempotent Kafka producer keyed by user.
 
 ### Phase 4 — Persistence
 
-- [ ] Postgres schema for notifications, attempts, keys, templates.
+- [x] Postgres schema for notifications, attempts, keys, templates.
 - [ ] Migrations with goose/golang-migrate.
 - [ ] `GET /notifications/:id` and search with pagination.
 - [ ] `POST /notifications/:id/redrive`.
@@ -500,99 +500,3 @@ Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship af
 - [ ] CONTRIBUTING.md, CODE_OF_CONDUCT.md, Apache-2.0 license.
 
 ---
-
-# Data & contract essentials (use early)
-
-**Event (published)**
-
-```json
-{
-  "id": "uuid",
-  "tenant": "acme",
-  "topic": "user.signup",
-  "user": { "email": "a@b.com", "phone": "+1123", "tokens": ["fcmToken"] },
-  "channels": ["email", "sms", "push"],
-  "template": { "name": "welcome", "locale": "en-US" },
-  "data": { "name": "Alice" },
-  "idempotency_key": "uuid-or-hash",
-  "created_at": "RFC3339"
-}
-```
-
-**DeliveryAttempt (stored)**
-
-- `attempt_id, notification_id, channel, provider, status(pending/sent/failed), try_no, error, latency_ms, created_at`
-
----
-
-# Provider abstraction (mini blueprint)
-
-**Email**
-
-```go
-type EmailProvider interface {
-  Send(ctx context.Context, e Email) (ProviderMsgID string, err error)
-}
-```
-
-**SMS**
-
-```go
-type SMSProvider interface {
-  Send(ctx context.Context, to, body string) (ProviderMsgID string, err error)
-}
-```
-
-**Push**
-
-```go
-type PushProvider interface {
-  Send(ctx context.Context, token string, msg PushMessage) (ProviderMsgID string, err error)
-}
-```
-
-**Provider registry**
-
-```go
-type ProviderFactory func(cfg map[string]string) (any, error)
-// Register("email.mailgun", factory) → config driven selection + fallback chain
-```
-
----
-
-# 🧪 Testing plan (baked in every phase)
-
-- Unit tests for providers with fakes (no network).
-- Integration tests with Mailpit for SMTP; Twilio test creds; Redpanda for Kafka.
-- k6 load test: publish 1k–10k events; assert success rate and P95.
-- toxiproxy to inject latency/timeouts; assert retries + fallback.
-- Golden tests for templates (rendered HTML/Text snapshots).
-
----
-
-# Tooling you’ll reuse
-
-- **Kafka**: `segmentio/kafka-go` (you already use it).
-- **Metrics**: `prometheus/client_golang`.
-- **Tracing**: `go.opentelemetry.io/otel`.
-- **Migrations**: `github.com/pressly/goose` or `github.com/golang-migrate/migrate`.
-- **Lint**: `golangci-lint`.
-- **Config**: `viper` or environment + struct tags.
-- **Logging**: `uber-go/zap`.
-
----
-
-## TL;DR build order (milestone view)
-
-1. Skeleton + local stack → `gomailer(SMTP+Mailgun)` → Email worker
-2. `gosms(Twilio+Vonage)` → SMS worker + DLR
-3. API (publish/notify, keys, idempotency)
-4. Persistence & redrive
-5. Templates, preferences, policy engine
-6. Observability & tracing
-7. Multi-tenant & quotas
-8. Push & Slack
-9. Replay/redrive tools, autoscaling
-10. Helm, CI/CD, examples, docs
-
-If you want, I can convert this into a **GitHub Project board (CSV/markdown)** with issues per task and acceptance criteria.

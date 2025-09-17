@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jsndz/signalbus/cmd/notification_api/app/internal/services"
+	"github.com/jsndz/signalbus/pkg/gosms"
 	"github.com/jsndz/signalbus/pkg/kafka"
 	"github.com/jsndz/signalbus/pkg/models"
 	"github.com/jsndz/signalbus/pkg/types"
@@ -103,6 +104,19 @@ func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 							Locale:    locale,
 							TenantID:  tenant.ID,
 						},
+					}
+					if channel == "sms"{
+						num ,ok :=pl.RecieverData["to"].(string)
+						if !ok || num == "" {
+							c.JSON(http.StatusBadRequest, gin.H{"error": "missing or invalid 'to' field for SMS"})
+        					return
+						}
+						to,err := gosms.NormalizeSMS(num)
+						if err != nil{
+							c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        					return
+						}
+						pl.RecieverData["to"] = to
 					}
 					msgBytes, err := json.Marshal(msg)
 					if err != nil {
