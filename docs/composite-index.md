@@ -1,4 +1,4 @@
-# Composite Unique Index in Postgres (Simple Explanation)
+# Composite Unique Index in Postgres 
 
 ## Without Composite Index
 

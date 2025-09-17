@@ -84,6 +84,6 @@ func handleShutdown(producer *kafka.Producer, log *zap.Logger) {
 	} else {
 		log.Info("Kafka producer closed cleanly")
 	}
-
+	
 	os.Exit(0)
 }

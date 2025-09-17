@@ -21,7 +21,7 @@ import (
 
 const maxRetries = 3
 
-func HandleMail(broker string, ctx context.Context, mailService gomailer.Mailer, logger *zap.Logger,tmplRepo *repositories.TemplateRepository) {
+func HandleMail(broker string, ctx context.Context, mailService gomailer.Mailer, logger *zap.Logger,tmplRepo *repositories.TemplateRepository,producer *kafka.Producer) {
 	topic := "notification.email"
 	c := kafka.NewConsumerFromEnv(topic,"email")
 	defer c.Close()
@@ -82,14 +82,14 @@ func HandleMail(broker string, ctx context.Context, mailService gomailer.Mailer,
 				gomailer.WithHTML(string(content["html"])),gomailer.WithText(string(content["text"])),
 				gomailer.WithSubject(user.Subject))
 
-			SendEmailWithRetry(logger,mailService,mail);
+			SendEmailWithRetry(logger,mailService,mail,producer);
 		}
 	}
 }
 
 
 
-func SendEmailWithRetry(Logger *zap.Logger,mailService gomailer.Mailer,mail gomailer.Email)(error){
+func SendEmailWithRetry(Logger *zap.Logger,mailService gomailer.Mailer,mail gomailer.Email,producer *kafka.Producer)(error){
 	timer := prometheus.NewTimer(metrics.NotificationSendDuration.WithLabelValues("sendgrid", "email_worker"))
 	defer timer.ObserveDuration()
 
@@ -116,12 +116,25 @@ func SendEmailWithRetry(Logger *zap.Logger,mailService gomailer.Mailer,mail goma
 	}
 
 	err := fmt.Errorf("SendMail failed after %d retries", maxRetries)
+	if err == nil {
+		return nil
+	}
 	metrics.ExternalAPIFailure.WithLabelValues("sendgrid", "email_worker").Inc()
 
-	Logger.Error("Permanent email failure - message lost",
+	Logger.Error("Permanent email failure - sending it to DLQ",
 		zap.String("to", strings.Join(mail.To, ",")),
 		zap.String("subject", mail.Subject),
 		zap.String("reason", "max_retries_exceeded"),
 	)
+	mailBytes, err := json.Marshal(mail)
+	if err != nil {
+		Logger.Error("Failed to marshal email for DLQ",
+			zap.String("to", strings.Join(mail.To, ",")),
+			zap.String("subject", mail.Subject),
+			zap.Error(err),
+		)
+		return err
+	}
+	producer.Publish(context.Background(), "notification.sms.dlq", []byte(mail.IdempotencyKey), mailBytes)
 	return err
 }

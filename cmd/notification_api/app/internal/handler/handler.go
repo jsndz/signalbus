@@ -52,7 +52,7 @@ func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 			return
 		}
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-		} else if err != nil {
+		} else  {
 			log.Error("failed to query idempotency key", zap.Error(err))
 		}
 

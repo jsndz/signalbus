@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/joho/godotenv"
 	"github.com/jsndz/signalbus/cmd/sms_worker/service"
@@ -12,6 +14,7 @@ import (
 	"github.com/jsndz/signalbus/middlewares"
 	"github.com/jsndz/signalbus/pkg/config"
 	"github.com/jsndz/signalbus/pkg/database"
+	"github.com/jsndz/signalbus/pkg/kafka"
 	"github.com/jsndz/signalbus/pkg/repositories"
 	"github.com/jsndz/signalbus/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -32,12 +35,14 @@ func main() {
 	if err != nil {
 		panic("failed to initialize Database: " + err.Error())
 	}
-	tmplRepo := repositories.NewTemplateRepository(db)
-
-	logr.Info("Starting SMS worker")
 
 	broker := utils.GetEnv("KAFKA_BROKER")
 	logr.Info("Kafka broker loaded", zap.String("broker", broker))
+	tmplRepo := repositories.NewTemplateRepository(db)
+	producer := kafka.NewProducer([]string{broker})
+
+	logr.Info("Starting SMS worker")
+
 
 	metrics.InitSMSMetrics()
 
@@ -53,7 +58,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go service.HandleSMS(broker, ctx, sender, logr, tmplRepo)
+	go service.HandleSMS(broker, ctx, sender, logr, tmplRepo,producer)
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
@@ -63,8 +68,26 @@ func main() {
 	})
 
 	wrappedMux := middlewares.MetricsMiddleware(mux)
+	go handleShutdown(producer, logr)
 
 	if err := http.ListenAndServe(":3003", wrappedMux); err != nil {
 		logr.Fatal("metrics server failed", zap.Error(err))
 	}
+}
+
+
+func handleShutdown(producer *kafka.Producer, log *zap.Logger) {
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	sig := <-quit
+	log.Info("Shutdown signal received", zap.String("signal", sig.String()))
+
+	if err := producer.Close(); err != nil {
+		log.Error("Error closing Kafka producer", zap.Error(err))
+	} else {
+		log.Info("Kafka producer closed cleanly")
+	}
+
+	os.Exit(0)
 }

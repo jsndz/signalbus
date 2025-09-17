@@ -21,7 +21,7 @@ const maxRetries = 3
 
 
 
-func  HandleSMS(broker string, ctx context.Context, smsService gosms.Sender, logger *zap.Logger,tmplRepo *repositories.TemplateRepository)  {
+func  HandleSMS(broker string, ctx context.Context, smsService gosms.Sender, logger *zap.Logger,tmplRepo *repositories.TemplateRepository,producer *kafka.Producer)  {
 	topic:= "notification.sms"
 	c := kafka.NewConsumerFromEnv(topic,"sms")
 	defer c.Close()
@@ -77,12 +77,12 @@ func  HandleSMS(broker string, ctx context.Context, smsService gosms.Sender, log
 				continue
 			}
 			sms := gosms.NewSMS(user.To, string(content["text"]), gosms.WithIdempotencyKey(user.IdempotencyKey))
-			SendSMSWithRetry(logger, smsService, sms)
+			SendSMSWithRetry(logger, smsService, sms,producer)
 		}
 	}
 }
 
-func  SendSMSWithRetry(Logger *zap.Logger,smsService gosms.Sender,sms gosms.SMS) error {
+func  SendSMSWithRetry(Logger *zap.Logger,smsService gosms.Sender,sms gosms.SMS,producer *kafka.Producer) error {
 	timer := prometheus.NewTimer(metrics.NotificationSendDuration.WithLabelValues("twilio", "sms_worker"))
 	defer timer.ObserveDuration()
 
@@ -107,6 +107,15 @@ func  SendSMSWithRetry(Logger *zap.Logger,smsService gosms.Sender,sms gosms.SMS)
 
 	err := fmt.Errorf("SendMail failed after %d retries", maxRetries)
 	metrics.ExternalAPIFailure.WithLabelValues("twilio", "sms_worker").Inc()
+	smsBytes, marshalErr := json.Marshal(sms)
+	if marshalErr != nil {
+		Logger.Error("Failed to marshal SMS for DLQ",
+			zap.String("to", sms.To),
+			zap.Error(marshalErr),
+		)
+		return marshalErr
+	}
+	producer.Publish(context.Background(), "notification.sms.dlq", []byte(sms.IdempotencyKey), smsBytes)
 
 	Logger.Error("Final SMS send failure",
 		zap.String("to", sms.To),
