@@ -13,6 +13,7 @@ import (
 	"github.com/jsndz/signalbus/metrics"
 	"github.com/jsndz/signalbus/pkg/gomailer"
 	"github.com/jsndz/signalbus/pkg/kafka"
+	"github.com/jsndz/signalbus/pkg/models"
 	"github.com/jsndz/signalbus/pkg/repositories"
 	"github.com/jsndz/signalbus/pkg/templates"
 	"github.com/jsndz/signalbus/pkg/types"
@@ -90,51 +91,78 @@ func HandleMail(broker string, ctx context.Context, mailService gomailer.Mailer,
 
 
 
-func SendEmailWithRetry(Logger *zap.Logger,mailService gomailer.Mailer,mail gomailer.Email,producer *kafka.Producer,notification_id uuid.UUID,notification_repo *repositories.NotificationRepository)(error){
-	timer := prometheus.NewTimer(metrics.NotificationSendDuration.WithLabelValues("sendgrid", "email_worker"))
-	defer timer.ObserveDuration()
+func SendEmailWithRetry(
+    logger *zap.Logger,
+    mailService gomailer.Mailer,
+    mail gomailer.Email,
+    producer *kafka.Producer,
+    notificationID uuid.UUID,
+    notificationRepo *repositories.NotificationRepository,
+) error {
+    timer := prometheus.NewTimer(metrics.NotificationSendDuration.WithLabelValues("sendgrid", "email_worker"))
+    defer timer.ObserveDuration()
 
-	for attempt := 1; attempt <= maxRetries; attempt++ {
+    for attempt := 1; attempt <= maxRetries; attempt++ {
+        start := time.Now()
+        err := mailService.Send(mail)
+        latency := time.Since(start).Milliseconds()
 
-		err:= mailService.Send(mail)
-		if err == nil {
-			notification_repo.UpdateStatus(notification_id,"delivered")
-			metrics.ExternalAPISuccess.WithLabelValues("sendgrid", "email_worker").Inc()
+        if err == nil {
+            notificationRepo.UpdateStatus(notificationID, "delivered")
+            notificationRepo.CreateAttempt(&models.DeliveryAttempt{
+                NotificationID: notificationID,
+                Channel:        "email",
+                Provider:       "sendgrid",
+                Status:         "delivered",
+                Try:            attempt,
+                LatencyMs:      latency,
+            })
+            metrics.ExternalAPISuccess.WithLabelValues("sendgrid", "email_worker").Inc()
+            return nil
+        }
 
-			return nil
-		}
-		baseTime := 1 * time.Second
-		backoffDelay := baseTime * time.Duration(1<<(attempt-1)) 
-		jitter := time.Duration(rand.Intn(1000)) * time.Millisecond
-		waitTime := backoffDelay * jitter
+        backoffDelay := time.Second * time.Duration(1<<(attempt-1))
+        jitter := time.Duration(rand.Intn(500)) * time.Millisecond
+        waitTime := backoffDelay + jitter
 
-		Logger.Warn("Email send failed, will retry",
-			zap.Int("attempt", attempt),
-			zap.Duration("retry_in", waitTime),
-			zap.Error(err),
-		)
+        notificationRepo.CreateAttempt(&models.DeliveryAttempt{
+            NotificationID: notificationID,
+            Channel:        "email",
+            Provider:       "sendgrid",
+            Status:         "failed",
+            Error:          err.Error(),
+            Try:            attempt,
+            LatencyMs:      latency,
+        })
 
-		time.Sleep(waitTime)
-	}
+        logger.Warn("Email send failed, will retry",
+            zap.Int("attempt", attempt),
+            zap.Duration("retry_in", waitTime),
+            zap.Error(err),
+        )
 
-	metrics.ExternalAPIFailure.WithLabelValues("sendgrid", "email_worker").Inc()
+        time.Sleep(waitTime)
+    }
 
-	Logger.Error("Permanent email failure - sending it to DLQ",
-		zap.String("to", strings.Join(mail.To, ",")),
-		zap.String("subject", mail.Subject),
-		zap.String("reason", fmt.Sprintf("SendMail failed after %d retries", maxRetries)),
-	)
-	notification_repo.UpdateStatus(notification_id,"failed")
+    metrics.ExternalAPIFailure.WithLabelValues("sendgrid", "email_worker").Inc()
+    notificationRepo.UpdateStatus(notificationID, "failed")
 
-	mailBytes, err := json.Marshal(mail)
-	if err != nil {
-		Logger.Error("Failed to marshal email for DLQ",
-			zap.String("to", strings.Join(mail.To, ",")),
-			zap.String("subject", mail.Subject),
-			zap.Error(err),
-		)
-		return err
-	}
-	producer.Publish(context.Background(), "notification.email.dlq", []byte(mail.IdempotencyKey), mailBytes)
-	return err
+    mailBytes, mErr := json.Marshal(mail)
+    if mErr != nil {
+        logger.Error("Failed to marshal email for DLQ",
+            zap.String("to", strings.Join(mail.To, ",")),
+            zap.String("subject", mail.Subject),
+            zap.Error(mErr),
+        )
+        return mErr
+    }
+
+    logger.Error("Permanent email failure - sending to DLQ",
+        zap.String("to", strings.Join(mail.To, ",")),
+        zap.String("subject", mail.Subject),
+    )
+
+    producer.Publish(context.Background(), "notification.email.dlq", []byte(mail.IdempotencyKey), mailBytes)
+
+    return fmt.Errorf("permanent email failure after %d retries", maxRetries)
 }

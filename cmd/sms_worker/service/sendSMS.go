@@ -11,6 +11,7 @@ import (
 	"github.com/jsndz/signalbus/metrics"
 	"github.com/jsndz/signalbus/pkg/gosms"
 	"github.com/jsndz/signalbus/pkg/kafka"
+	"github.com/jsndz/signalbus/pkg/models"
 	"github.com/jsndz/signalbus/pkg/repositories"
 	"github.com/jsndz/signalbus/pkg/templates"
 	"github.com/jsndz/signalbus/pkg/types"
@@ -82,49 +83,79 @@ func  HandleSMS(broker string, ctx context.Context, smsService gosms.Sender, log
 		}
 	}
 }
+func SendSMSWithRetry(
+    logger *zap.Logger,
+    smsService gosms.Sender,
+    sms gosms.SMS,
+    producer *kafka.Producer,
+    notificationID uuid.UUID,
+    notificationRepo *repositories.NotificationRepository,
+) error {
+    timer := prometheus.NewTimer(metrics.NotificationSendDuration.WithLabelValues("twilio", "sms_worker"))
+    defer timer.ObserveDuration()
 
-func  SendSMSWithRetry(Logger *zap.Logger,smsService gosms.Sender,sms gosms.SMS,producer *kafka.Producer,notification_id uuid.UUID,notification_repo *repositories.NotificationRepository) error {
-	timer := prometheus.NewTimer(metrics.NotificationSendDuration.WithLabelValues("twilio", "sms_worker"))
-	defer timer.ObserveDuration()
+    for attempt := 1; attempt <= maxRetries; attempt++ {
+        start := time.Now()
+        err := smsService.Send(sms)
+        latency := time.Since(start).Milliseconds()
 
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		err := smsService.Send(sms)
-		if err == nil {
-			notification_repo.UpdateStatus(notification_id,"delivered")
+        if err == nil {
+            notificationRepo.UpdateStatus(notificationID, "delivered")
+            notificationRepo.CreateAttempt(&models.DeliveryAttempt{
+                NotificationID: notificationID,
+                Channel:        "sms",
+                Provider:       "twilio",
+                Status:         "delivered",
+                Try:            attempt,
+                LatencyMs:      latency,
+            })
 
-			metrics.ExternalAPISuccess.WithLabelValues("twilio", "sms_worker").Inc()
-			return nil
-		}
-		baseTime := 1 * time.Second
-		backoffDelay := baseTime * time.Duration( 1 << ( attempt - 1 ) ) 
-		jitter := time.Duration(rand.Intn(1000)) * time.Millisecond
-		waitTime := backoffDelay * jitter
-		Logger.Warn("SMS send attempt failed, will retry",
-			zap.Int("attempt", attempt),
-			zap.Error(err),
-			zap.Duration("retry_in", waitTime),
-		)
+            metrics.ExternalAPISuccess.WithLabelValues("twilio", "sms_worker").Inc()
+            return nil
+        }
 
-		time.Sleep(waitTime)
-	}
+        notificationRepo.CreateAttempt(&models.DeliveryAttempt{
+            NotificationID: notificationID,
+            Channel:        "sms",
+            Provider:       "twilio",
+            Status:         "failed",
+            Error:          err.Error(),
+            Try:            attempt,
+            LatencyMs:      latency,
+        })
 
-	err := fmt.Errorf("SendMail failed after %d retries", maxRetries)
-	metrics.ExternalAPIFailure.WithLabelValues("twilio", "sms_worker").Inc()
-	smsBytes, marshalErr := json.Marshal(sms)
-	if marshalErr != nil {
-		Logger.Error("Failed to marshal SMS for DLQ",
-			zap.String("to", sms.To),
-			zap.Error(marshalErr),
-		)
-		return marshalErr
-	}
-	producer.Publish(context.Background(), "notification.sms.dlq", []byte(sms.IdempotencyKey), smsBytes)
+        backoffDelay := time.Second * time.Duration(1<<(attempt-1))
+        jitter := time.Duration(rand.Intn(500)) * time.Millisecond
+        waitTime := backoffDelay + jitter
 
-	Logger.Error("Final SMS send failure",
-		zap.String("to", sms.To),
-		zap.Error(err),
-	)
-	notification_repo.UpdateStatus(notification_id,"failed")
+        logger.Warn("SMS send attempt failed, will retry",
+            zap.Int("attempt", attempt),
+            zap.Error(err),
+            zap.Duration("retry_in", waitTime),
+        )
 
-	return err
+        time.Sleep(waitTime)
+    }
+
+    
+    metrics.ExternalAPIFailure.WithLabelValues("twilio", "sms_worker").Inc()
+    notificationRepo.UpdateStatus(notificationID, "failed")
+
+    smsBytes, marshalErr := json.Marshal(sms)
+    if marshalErr != nil {
+        logger.Error("Failed to marshal SMS for DLQ",
+            zap.String("to", sms.To),
+            zap.Error(marshalErr),
+        )
+        return marshalErr
+    }
+
+    producer.Publish(context.Background(), "notification.sms.dlq", []byte(sms.IdempotencyKey), smsBytes)
+
+    logger.Error("Final SMS send failure",
+        zap.String("to", sms.To),
+        zap.Error(fmt.Errorf("SendSMS failed after %d retries", maxRetries)),
+    )
+
+    return fmt.Errorf("SendSMS failed after %d retries", maxRetries)
 }
