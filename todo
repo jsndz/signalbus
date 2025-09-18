@@ -433,7 +433,7 @@ Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship af
 ### Phase 2 — `gosms` + SMS worker
 
 - [x] Define interface and Twilio+Vonage drivers.
-- [ ] Normalize E.164 and validate.
+- [x] Normalize E.164 and validate.
 - [ ] DLR webhook and status updates.
 - [x] SMS worker with retry + DLQ + per-tenant rate limit.
 - [x] Metrics
@@ -461,7 +461,7 @@ Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship af
 - [x] Template storage; engines (Go tmpl + MJML pipeline).
 - [ ] Localization field and selection.
 - [ ] Opt-out table and DND windows (tz aware).
-- [ ] Policy engine (topic → channels, honoring prefs).
+- [x] Policy engine (topic → channels, honoring prefs).
 
 ### Phase 6 — Observability
 

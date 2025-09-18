@@ -17,9 +17,9 @@ func NewNotificationService(db *gorm.DB) *NotificationService {
     return &NotificationService{repo: repositories.NewNotificationRepository(db)}
 }
 
-func (s *NotificationService) CreateNotification(tenantID uuid.UUID, topic, userRef string) (*models.Notification, error) {
+func (s *NotificationService) CreateNotification(tenantID uuid.UUID, topic, userRef string) (uuid.UUID, error) {
     if topic == "" {
-        return nil, errors.New("notification topic cannot be empty")
+        return uuid.Nil, errors.New("notification topic cannot be empty")
     }
     notification := &models.Notification{
         TenantID: tenantID,
@@ -28,9 +28,9 @@ func (s *NotificationService) CreateNotification(tenantID uuid.UUID, topic, user
         Status:   "pending",
     }
     if err := s.repo.Create(notification); err != nil {
-        return nil, err
+        return uuid.Nil, err
     }
-    return notification, nil
+    return notification.ID, nil
 }
 
 func (s *NotificationService) GetNotification(id uuid.UUID) (*models.Notification, error) {

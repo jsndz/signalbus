@@ -19,10 +19,17 @@ import (
 	"gorm.io/gorm"
 )
 
+type NotificationHandler struct {
+	service *services.NotificationService
+}
 
-func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
+func NewNotificationHandler(db *gorm.DB) *NotificationHandler {
+	return &NotificationHandler{service: services.NewNotificationService(db)}
+}
+
+func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB,ndb *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		s := services.NewTenantService(db)
+		s := services.NewTenantService(tdb)
 		apiKey := c.GetHeader("X-API-Key")
 
 		log.Info("Incoming HTTP request",
@@ -48,7 +55,7 @@ func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 		}
 
 		var record models.IdempotencyKey
-		if err := db.Where("key = ? AND tenant_id = ?", req.IdempotencyKey, tenant.ID).First(&record).Error; err == nil {
+		if err := tdb.Where("key = ? AND tenant_id = ?", req.IdempotencyKey, tenant.ID).First(&record).Error; err == nil {
 			c.Data(record.StatusCode, "application/json", []byte(record.Response))
 			return
 		}
@@ -67,6 +74,7 @@ func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 			Data:         req.UserData,
 			TemplateData: req.TemplateData,
 		})
+
 		sum := sha256.Sum256(reqBytes)
 		reqHash := hex.EncodeToString(sum[:])
 
@@ -79,6 +87,7 @@ func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 
 		matched := false
 		ctx := context.Background()
+
 		for _, policy := range tenant.Policies {
 			if policy.Topic != req.EventType {
 				continue
@@ -95,6 +104,8 @@ func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 			for _, channel := range policy.Channels {
 				topic := "notification." + channel
 				for _, pl := range payloads {
+					notification_id,_:= h.service.CreateNotification(policy.TenantID,req.EventType,req.UserRef)	
+
 					msg := types.KafkaStreamData{
 						IdempotencyKey: req.IdempotencyKey,
 						RecieverData:   pl.RecieverData,
@@ -104,6 +115,7 @@ func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 							Locale:    locale,
 							TenantID:  tenant.ID,
 						},
+						NotificationId:notification_id,
 					}
 					if channel == "sms"{
 						num ,ok :=pl.RecieverData["to"].(string)
@@ -129,6 +141,7 @@ func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 						log.Error("failed to publish message", zap.String("topic", topic), zap.Error(err))
 					} else {
 						log.Debug("published message", zap.String("topic", topic), zap.String("tenant", tenant.ID.String()))
+						
 					}
 				}
 			}
@@ -143,7 +156,7 @@ func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 		resp := gin.H{"message": "Notification accepted"}
 		respBytes, _ := json.Marshal(resp)
 
-		if err := db.Create(&models.IdempotencyKey{
+		if err := tdb.Create(&models.IdempotencyKey{
 			Key:         req.IdempotencyKey,
 			TenantID:    tenant.ID,
 			RequestHash: reqHash,
@@ -152,7 +165,6 @@ func Notify(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 		}).Error; err != nil {
 			log.Error("failed to create idempotency record", zap.Error(err))
 		}
-
 		c.JSON(http.StatusAccepted, resp)
 	}
 }

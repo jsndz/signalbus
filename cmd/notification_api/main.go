@@ -28,6 +28,11 @@ func main() {
 		log.Println("No .env file found, using system env")
 	}
 	broker := utils.GetEnv("KAFKA_BROKER")
+	notification_dns := os.Getenv("NOTIFICATION_DB")
+	notification_db,err := database.InitDB(notification_dns)
+	if err != nil {
+		panic("DB not init  " + err.Error())
+	}
 	tenant_dns := os.Getenv("TENANT_DB")
 	tenant_db,err := database.InitDB(tenant_dns)
 	if err != nil {
@@ -36,6 +41,7 @@ func main() {
 	template_dns := os.Getenv("TEMPLATE_DB")
 	template_db,err := database.InitDB(template_dns)
 	database.MigrateDB(template_db, &models.Template{})
+	database.MigrateDB(notification_db, &models.Notification{},&models.DeliveryAttempt{})
 	database.MigrateDB(tenant_db, &models.Tenant{},&models.Policy{},&models.APIKey{},&models.IdempotencyKey{})
 	if err != nil {
 		panic("DB not init  " + err.Error())
@@ -60,7 +66,7 @@ func main() {
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	v1 := router.Group("/api")
-	routes.Notifications(v1.Group("/notify"), producer,tenant_db, log)
+	routes.Notifications(v1.Group("/notify"), producer,tenant_db,notification_db, log)
 	routes.Tenants(v1.Group("/tenants"),tenant_db,log)
 	routes.APIKeys(v1.Group("/keys"),tenant_db,log)
 	routes.Policies(v1.Group("/policies"),tenant_db,log)

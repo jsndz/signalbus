@@ -31,6 +31,8 @@ func main() {
 	defer logr.Sync()
 
 	dsn := os.Getenv("TENANT_DB")
+	notification_dns := os.Getenv("NOTIFICATION_DB")
+
 	db, err := database.InitDB(dsn)
 	if err != nil {
 		panic("failed to initialize Database: " + err.Error())
@@ -40,7 +42,11 @@ func main() {
 	logr.Info("Kafka broker loaded", zap.String("broker", broker))
 	tmplRepo := repositories.NewTemplateRepository(db)
 	producer := kafka.NewProducer([]string{broker})
-
+	notification_db,err := database.InitDB(notification_dns)
+	if err != nil {
+		panic("failed to initialize Database: " + err.Error())
+	}
+	notification_repo := repositories.NewNotificationRepository(notification_db)
 	logr.Info("Starting SMS worker")
 
 
@@ -58,7 +64,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go service.HandleSMS(broker, ctx, sender, logr, tmplRepo,producer)
+	go service.HandleSMS(broker, ctx, sender, logr, tmplRepo,notification_repo,producer)
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())

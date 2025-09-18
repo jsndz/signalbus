@@ -8,10 +8,11 @@ import (
 	"gorm.io/gorm"
 )
 
-func Notifications(router *gin.RouterGroup,p *kafka.Producer,db *gorm.DB,log *zap.Logger ){
-	router.POST("/",handler.Notify(p,db,log))
-}
+func Notifications(router *gin.RouterGroup,p *kafka.Producer,tdb *gorm.DB,ndb *gorm.DB,log *zap.Logger ){
+	notificationHandler :=handler.NewNotificationHandler(ndb)
 
+	router.POST("/",notificationHandler.Notify(p,tdb,ndb,log))
+}
 
 func Tenants(r *gin.RouterGroup,db *gorm.DB,log *zap.Logger ){
 	tenantHandler :=handler.NewTenantHandler(db)
@@ -21,8 +22,6 @@ func Tenants(r *gin.RouterGroup,db *gorm.DB,log *zap.Logger ){
 	r.DELETE("/:id", tenantHandler.DeleteTenant)
 	r.POST("/policies", tenantHandler.CreatePolicy)
 }
-
-
 
 func Templates(r *gin.RouterGroup,db *gorm.DB,log *zap.Logger ){
 	templateHandler :=handler.NewTemplateHandler(db)

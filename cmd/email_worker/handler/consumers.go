@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jsndz/signalbus/metrics"
 	"github.com/jsndz/signalbus/pkg/gomailer"
 	"github.com/jsndz/signalbus/pkg/kafka"
@@ -21,7 +22,7 @@ import (
 
 const maxRetries = 3
 
-func HandleMail(broker string, ctx context.Context, mailService gomailer.Mailer, logger *zap.Logger,tmplRepo *repositories.TemplateRepository,producer *kafka.Producer) {
+func HandleMail(broker string, ctx context.Context, mailService gomailer.Mailer, logger *zap.Logger,tmplRepo *repositories.TemplateRepository,notificationRepo *repositories.NotificationRepository,producer *kafka.Producer) {
 	topic := "notification.email"
 	c := kafka.NewConsumerFromEnv(topic,"email")
 	defer c.Close()
@@ -82,14 +83,14 @@ func HandleMail(broker string, ctx context.Context, mailService gomailer.Mailer,
 				gomailer.WithHTML(string(content["html"])),gomailer.WithText(string(content["text"])),
 				gomailer.WithSubject(user.Subject))
 
-			SendEmailWithRetry(logger,mailService,mail,producer);
+			SendEmailWithRetry(logger,mailService,mail,producer,msg.NotificationId,notificationRepo);
 		}
 	}
 }
 
 
 
-func SendEmailWithRetry(Logger *zap.Logger,mailService gomailer.Mailer,mail gomailer.Email,producer *kafka.Producer)(error){
+func SendEmailWithRetry(Logger *zap.Logger,mailService gomailer.Mailer,mail gomailer.Email,producer *kafka.Producer,notification_id uuid.UUID,notification_repo *repositories.NotificationRepository)(error){
 	timer := prometheus.NewTimer(metrics.NotificationSendDuration.WithLabelValues("sendgrid", "email_worker"))
 	defer timer.ObserveDuration()
 
@@ -97,6 +98,7 @@ func SendEmailWithRetry(Logger *zap.Logger,mailService gomailer.Mailer,mail goma
 
 		err:= mailService.Send(mail)
 		if err == nil {
+			notification_repo.UpdateStatus(notification_id,"delivered")
 			metrics.ExternalAPISuccess.WithLabelValues("sendgrid", "email_worker").Inc()
 
 			return nil
@@ -122,6 +124,8 @@ func SendEmailWithRetry(Logger *zap.Logger,mailService gomailer.Mailer,mail goma
 		zap.String("subject", mail.Subject),
 		zap.String("reason", fmt.Sprintf("SendMail failed after %d retries", maxRetries)),
 	)
+	notification_repo.UpdateStatus(notification_id,"failed")
+
 	mailBytes, err := json.Marshal(mail)
 	if err != nil {
 		Logger.Error("Failed to marshal email for DLQ",

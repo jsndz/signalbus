@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jsndz/signalbus/metrics"
 	"github.com/jsndz/signalbus/pkg/gosms"
 	"github.com/jsndz/signalbus/pkg/kafka"
@@ -21,7 +22,7 @@ const maxRetries = 3
 
 
 
-func  HandleSMS(broker string, ctx context.Context, smsService gosms.Sender, logger *zap.Logger,tmplRepo *repositories.TemplateRepository,producer *kafka.Producer)  {
+func  HandleSMS(broker string, ctx context.Context, smsService gosms.Sender, logger *zap.Logger,tmplRepo *repositories.TemplateRepository,notificationRepo *repositories.NotificationRepository,producer *kafka.Producer)  {
 	topic:= "notification.sms"
 	c := kafka.NewConsumerFromEnv(topic,"sms")
 	defer c.Close()
@@ -77,18 +78,20 @@ func  HandleSMS(broker string, ctx context.Context, smsService gosms.Sender, log
 				continue
 			}
 			sms := gosms.NewSMS(user.To, string(content["text"]), gosms.WithIdempotencyKey(user.IdempotencyKey))
-			SendSMSWithRetry(logger, smsService, sms,producer)
+			SendSMSWithRetry(logger, smsService, sms,producer,msg.NotificationId,notificationRepo)
 		}
 	}
 }
 
-func  SendSMSWithRetry(Logger *zap.Logger,smsService gosms.Sender,sms gosms.SMS,producer *kafka.Producer) error {
+func  SendSMSWithRetry(Logger *zap.Logger,smsService gosms.Sender,sms gosms.SMS,producer *kafka.Producer,notification_id uuid.UUID,notification_repo *repositories.NotificationRepository) error {
 	timer := prometheus.NewTimer(metrics.NotificationSendDuration.WithLabelValues("twilio", "sms_worker"))
 	defer timer.ObserveDuration()
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		err := smsService.Send(sms)
 		if err == nil {
+			notification_repo.UpdateStatus(notification_id,"delivered")
+
 			metrics.ExternalAPISuccess.WithLabelValues("twilio", "sms_worker").Inc()
 			return nil
 		}
@@ -121,5 +124,7 @@ func  SendSMSWithRetry(Logger *zap.Logger,smsService gosms.Sender,sms gosms.SMS,
 		zap.String("to", sms.To),
 		zap.Error(err),
 	)
+	notification_repo.UpdateStatus(notification_id,"failed")
+
 	return err
 }

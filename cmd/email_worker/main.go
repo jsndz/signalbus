@@ -29,12 +29,19 @@ func main() {
 		panic("failed to initialize zap logger: " + err.Error())
 	}
 	defer logr.Sync()
-	dns := os.Getenv("TEMPLATE_DB")
-	db,err := database.InitDB(dns)
+	template_dns := os.Getenv("TEMPLATE_DB")
+	template_db,err := database.InitDB(template_dns)
 	if err != nil {
 		panic("failed to initialize Database: " + err.Error())
 	}
-	tmpl_repo := repositories.NewTemplateRepository(db)
+	tmpl_repo := repositories.NewTemplateRepository(template_db)
+
+	notification_dns := os.Getenv("NOTIFICATION_DB")
+	notification_db,err := database.InitDB(notification_dns)
+	if err != nil {
+		panic("failed to initialize Database: " + err.Error())
+	}
+	notification_repo := repositories.NewNotificationRepository(notification_db)
 
 	logr.Info("Starting email worker service")
 
@@ -66,7 +73,7 @@ func main() {
 	}
 	logr.Info("Mail service initialized")
 
-	go handler.HandleMail(broker, ctx, Mailer, logr, tmpl_repo,producer)
+	go handler.HandleMail(broker, ctx, Mailer, logr, tmpl_repo,notification_repo,producer)
 	wrappedMux := middlewares.MetricsMiddleware(mux)
 	go handleShutdown(producer, logr)
 
