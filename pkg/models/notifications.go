@@ -27,6 +27,7 @@ type DeliveryAttempt struct {
     Error          string    `gorm:"type:text"`
     Try            int       `gorm:"not null"`
     LatencyMs      int64     `gorm:"not null"`
+    Message        []byte       
     CreatedAt      time.Time `gorm:"autoCreateTime"`
 
     Notification Notification `gorm:"foreignKey:NotificationID;constraint:OnDelete:CASCADE"`

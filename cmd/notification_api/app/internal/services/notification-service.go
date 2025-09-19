@@ -48,3 +48,7 @@ func (s *NotificationService) DeleteNotification(id uuid.UUID) error {
 func (s *NotificationService) UpdateStatus(id uuid.UUID, status string) error {
     return s.repo.UpdateStatus(id, status)
 }
+
+func (s *NotificationService) DLQNotification(id uuid.UUID) (*models.DeliveryAttempt,error) {
+    return s.repo.GetDLQByNotificationID(id)
+}

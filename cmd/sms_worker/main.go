@@ -50,7 +50,7 @@ func main() {
 	logr.Info("Starting SMS worker")
 
 
-	metrics.InitSMSMetrics()
+	metrics.InitWorkerMetrics()
 
 	cfg, err := config.LoadConfig("./config.yaml")
 	if err != nil {

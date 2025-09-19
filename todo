@@ -453,13 +453,14 @@ Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship af
 
 - [x] Postgres schema for notifications, attempts, keys, templates.
 - [ ] Migrations with goose/golang-migrate.
-- [ ] `GET /notifications/:id` and search with pagination.
+- [x] `GET /notifications/:id` and search with pagination.
 - [ ] `POST /notifications/:id/redrive`.
 
 ### Phase 5 — Templates & prefs
 
-- [x] Template storage; engines (Go tmpl + MJML pipeline).
-- [ ] Localization field and selection.
+- [x] Template storage; engines (Go tmpl )
+- [ ] MJML pipeline.
+- [x] Localization field and selection.
 - [ ] Opt-out table and DND windows (tz aware).
 - [x] Policy engine (topic → channels, honoring prefs).
 

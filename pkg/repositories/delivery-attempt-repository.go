@@ -26,6 +26,16 @@ func (r *DeliveryAttemptRepository) GetByID(id uuid.UUID) (*models.DeliveryAttem
     return &attempt, nil
 }
 
+func (r *DeliveryAttemptRepository) GetDLQByNotificationID(id uuid.UUID) (*models.DeliveryAttempt, error) {
+    var attempt models.DeliveryAttempt
+    if err := r.db.
+        Where("notification_id = ? AND status = ?", id, "dlq").
+        First(&attempt).Error; err != nil {
+        return nil, err
+    }
+    return &attempt, nil
+}
+
 func (r *DeliveryAttemptRepository) ListByNotification(notificationID uuid.UUID) ([]models.DeliveryAttempt, error) {
     var attempts []models.DeliveryAttempt
     if err := r.db.Where("notification_id = ?", notificationID).

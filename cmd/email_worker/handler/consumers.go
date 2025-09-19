@@ -117,7 +117,7 @@ func SendEmailWithRetry(
                 Try:            attempt,
                 LatencyMs:      latency,
             })
-            metrics.ExternalAPISuccess.WithLabelValues("sendgrid", "email_worker").Inc()
+            metrics.ExternalAPISuccessTotal.WithLabelValues("sendgrid", "email_worker").Inc()
             return nil
         }
 
@@ -129,7 +129,7 @@ func SendEmailWithRetry(
             NotificationID: notificationID,
             Channel:        "email",
             Provider:       "sendgrid",
-            Status:         "failed",
+            Status:         "retrying",
             Error:          err.Error(),
             Try:            attempt,
             LatencyMs:      latency,
@@ -144,7 +144,7 @@ func SendEmailWithRetry(
         time.Sleep(waitTime)
     }
 
-    metrics.ExternalAPIFailure.WithLabelValues("sendgrid", "email_worker").Inc()
+    metrics.ExternalAPIFailureTotal.WithLabelValues("sendgrid", "email_worker").Inc()
     notificationRepo.UpdateStatus(notificationID, "failed")
 
     mailBytes, mErr := json.Marshal(mail)
@@ -162,7 +162,13 @@ func SendEmailWithRetry(
         zap.String("subject", mail.Subject),
     )
 
-    producer.Publish(context.Background(), "notification.email.dlq", []byte(mail.IdempotencyKey), mailBytes)
-
+	producer.Publish(context.Background(), "notification.email.dlq", notificationID[:], mailBytes)
+	notificationRepo.CreateAttempt(&models.DeliveryAttempt{
+            NotificationID: notificationID,
+            Channel:        "email",
+            Provider:       "sendgrid",
+            Status:         "dlq",
+			Message: mailBytes, 
+    })
     return fmt.Errorf("permanent email failure after %d retries", maxRetries)
 }

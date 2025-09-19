@@ -10,8 +10,10 @@ import (
 
 func Notifications(router *gin.RouterGroup,p *kafka.Producer,tdb *gorm.DB,ndb *gorm.DB,log *zap.Logger ){
 	notificationHandler :=handler.NewNotificationHandler(ndb)
-
 	router.POST("/",notificationHandler.Notify(p,tdb,ndb,log))
+	router.GET("/:id",notificationHandler.GetNotification(log))
+	router.POST("/:id/redrive",notificationHandler.RedriveNotification(log,p))
+
 }
 
 func Tenants(r *gin.RouterGroup,db *gorm.DB,log *zap.Logger ){

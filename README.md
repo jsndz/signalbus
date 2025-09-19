@@ -212,4 +212,9 @@ Pull requests are welcome! Open an issue first for feedback or discussion.
 - [] Idempotency for SMTP.
 - [x] DLQ
 - [] DLR webhook
-- [] Persistance
+- [x] Persistance
+- [] Redis
+- [] Publish
+- [] redrive
+- [] Long term rate limiting
+- []

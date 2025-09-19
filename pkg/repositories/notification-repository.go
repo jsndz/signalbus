@@ -69,3 +69,13 @@ func (r *NotificationRepository) ListAttemptsByNotification(notificationID uuid.
 func (r *NotificationRepository) DeleteAttempt(id uuid.UUID) error {
 	return r.db.Delete(&models.DeliveryAttempt{}, "id = ?", id).Error
 }
+
+func (r *NotificationRepository) GetDLQByNotificationID(id uuid.UUID) (*models.DeliveryAttempt, error) {
+    var attempt models.DeliveryAttempt
+    if err := r.db.
+        Where("notification_id = ? AND status = ?", id, "dlq").
+        First(&attempt).Error; err != nil {
+        return nil, err
+    }
+    return &attempt, nil
+}

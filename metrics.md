@@ -191,3 +191,9 @@
   **Panel Type:** Stat
 
 ---
+
+
+
+TODO:
+
+- [] http_rate_limit_rejections_total (only if rate limiting applies).

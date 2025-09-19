@@ -49,7 +49,7 @@ func main() {
 	logr.Info("Kafka broker resolved", zap.String("broker", broker))
 	producer := kafka.NewProducer([]string{broker})
 
-	metrics.InitEmailMetrics()
+	metrics.InitWorkerMetrics()
 
 	mux :=  http.NewServeMux()
 	

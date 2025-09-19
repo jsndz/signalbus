@@ -2,110 +2,155 @@ package metrics
 
 import "github.com/prometheus/client_golang/prometheus"
 
-var HttpRequestTotal = prometheus.NewCounterVec(
+var HttpRequestsTotal = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
-		Name: "http_total_requests",
-		Help: "Total number of HTTP requests",
-
+		Name: "http_requests_total",
+		Help: "Total number of HTTP requests received",
 	},
-	[]string{"endpoint","status","method"},
+	[]string{"endpoint", "status", "method"},
 )
-
 
 var HttpRequestDuration = prometheus.NewHistogramVec(
 	prometheus.HistogramOpts{
-		Name: "http_request_duration_seconds",
-		Help: "Duration for http requests",
+		Name:    "http_request_duration_seconds",
+		Help:    "Duration of HTTP requests in seconds",
 		Buckets: prometheus.DefBuckets,
 	},
 	[]string{"endpoint", "method"},
 )
 
-
-var KafkaPublisherSuccess = prometheus.NewCounterVec(
+var HttpErrorsTotal = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
-		Name: "kafka_publish_success_total",
-		Help: "Total number of successful publishes",
+		Name: "http_errors_total",
+		Help: "Total number of failed HTTP requests (4xx/5xx)",
 	},
-	[]string{"topic"},
+	[]string{"endpoint", "status", "method"},
 )
 
-var KafkaPublisherFailure = prometheus.NewCounterVec(
+var HttpRateLimitRejectionsTotal = prometheus.NewCounter(
 	prometheus.CounterOpts{
-		Name: "kafka_publish_failure_total",
-		Help: "Total number of Failed publishes",
+		Name: "http_rate_limit_rejections_total",
+		Help: "Total number of HTTP requests rejected due to rate limiting",
 	},
-	[]string{"topic"},
-
 )
 
-var KafkaSubscriberSuccess = prometheus.NewCounterVec(
+
+
+var NotificationsAttemptedTotal = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
-		Name: "kafka_subscriber_success_total",
-		Help: "Total number of successful subscribes",
+		Name: "notifications_attempted_total",
+		Help: "Total number of notifications attempted",
 	},
-	[]string{"topic"},
-
-)
-
-var KafkaSubscriberFailure = prometheus.NewCounterVec(
-	prometheus.CounterOpts{
-		Name: "kafka_subscriber_failure_total",
-		Help: "Total number of Failed subscribes",
-	},
-	[]string{"topic"},
-
-)
-
-var ExternalAPISuccess = prometheus.NewCounterVec(
-	prometheus.CounterOpts{
-		Name: "external_api_success_total",
-		Help: "Successful external API calls",
-	},
-	[]string{"provider", "service"},
-)
-
-var ExternalAPIFailure = prometheus.NewCounterVec(
-	prometheus.CounterOpts{
-		Name: "external_api_failure_total",
-		Help: "Failed external API calls",
-	},
-	[]string{"provider", "service"},
+	[]string{"channel", "status", "provider"},
 )
 
 var NotificationSendDuration = prometheus.NewHistogramVec(
 	prometheus.HistogramOpts{
 		Name:    "notification_send_duration_seconds",
 		Help:    "Time taken to send notifications via external providers",
-		Buckets: prometheus.DefBuckets, 
+		Buckets: prometheus.DefBuckets,
+	},
+	[]string{"provider", "channel"},
+)
+
+var NotificationRetriesTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "notification_retries_total",
+		Help: "Total number of notification retries",
+	},
+	[]string{"reason", "channel"},
+)
+
+var NotificationDLQTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "notification_dlq_total",
+		Help: "Total number of notifications sent to DLQ",
+	},
+	[]string{"reason", "channel"},
+)
+
+
+var KafkaPublishFailureTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "kafka_publish_failure_total",
+		Help: "Total number of failed Kafka publishes",
+	},
+	[]string{"topic"},
+)
+
+var KafkaSubscriberFailureTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "kafka_subscriber_failure_total",
+		Help: "Total number of failed Kafka subscribes",
+	},
+	[]string{"topic"},
+)
+
+var KafkaConsumerLag = prometheus.NewGaugeVec(
+	prometheus.GaugeOpts{
+		Name: "kafka_consumer_lag",
+		Help: "Lag of Kafka consumer group per topic/partition",
+	},
+	[]string{"group", "topic", "partition"},
+)
+
+var KafkaRebalancesTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "kafka_rebalances_total",
+		Help: "Number of Kafka consumer group rebalances",
+	},
+	[]string{"group"},
+)
+
+
+
+var ExternalAPISuccessTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "external_api_success_total",
+		Help: "Total number of successful external API calls",
 	},
 	[]string{"provider", "service"},
 )
 
+var ExternalAPIFailureTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "external_api_failure_total",
+		Help: "Total number of failed external API calls",
+	},
+	[]string{"provider", "service"},
+)
 
-func InitAPIMetrics(){
+var ExternalAPIDuration = prometheus.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "external_api_duration_seconds",
+		Help:    "Duration of external API calls in seconds",
+		Buckets: prometheus.DefBuckets,
+	},
+	[]string{"provider", "service"},
+)
+
+func InitAPIMetrics() {
+	prometheus.MustRegister(HttpRequestsTotal)
 	prometheus.MustRegister(HttpRequestDuration)
-	prometheus.MustRegister(HttpRequestTotal)
-	prometheus.MustRegister(KafkaPublisherFailure)
-	prometheus.MustRegister(KafkaPublisherSuccess)
+	prometheus.MustRegister(HttpErrorsTotal)
+	prometheus.MustRegister(HttpRateLimitRejectionsTotal)
 }
 
-func InitEmailMetrics(){
-	prometheus.MustRegister(HttpRequestDuration)
-	prometheus.MustRegister(HttpRequestTotal)
-	prometheus.MustRegister(KafkaSubscriberSuccess)
-	prometheus.MustRegister(KafkaSubscriberFailure)
-	prometheus.MustRegister(ExternalAPIFailure)
-	prometheus.MustRegister(ExternalAPISuccess)
+func InitWorkerMetrics() {
+	prometheus.MustRegister(NotificationsAttemptedTotal)
 	prometheus.MustRegister(NotificationSendDuration)
+	prometheus.MustRegister(NotificationRetriesTotal)
+	prometheus.MustRegister(NotificationDLQTotal)
+	prometheus.MustRegister(ExternalAPISuccessTotal)
+	prometheus.MustRegister(ExternalAPIFailureTotal)
+	prometheus.MustRegister(ExternalAPIDuration)
 }
 
-func InitSMSMetrics(){
-	prometheus.MustRegister(HttpRequestDuration)
-	prometheus.MustRegister(HttpRequestTotal)
-	prometheus.MustRegister(KafkaSubscriberSuccess)
-	prometheus.MustRegister(KafkaSubscriberFailure)
-	prometheus.MustRegister(ExternalAPIFailure)
-	prometheus.MustRegister(ExternalAPISuccess)
-	prometheus.MustRegister(NotificationSendDuration)
+func InitKafkaMetrics() {
+	prometheus.MustRegister(KafkaPublishFailureTotal)
+	prometheus.MustRegister(KafkaSubscriberFailureTotal)
+	prometheus.MustRegister(KafkaConsumerLag)
+	prometheus.MustRegister(KafkaRebalancesTotal)
 }
+
+

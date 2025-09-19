@@ -24,7 +24,7 @@ func MetricsMiddleware(next http.Handler) http.HandlerFunc {
 		endpoint := r.URL.Path
 		method := r.Method
 		status := fmt.Sprintf("%d", wrappedWriter.StatusCode)
-		metrics.HttpRequestTotal.WithLabelValues(endpoint, status, method).Inc()
+		metrics.HttpRequestsTotal.WithLabelValues(endpoint, status, method).Inc()
 		metrics.HttpRequestDuration.WithLabelValues(endpoint, method).Observe(duration)
 	})
 }
@@ -37,7 +37,7 @@ func GinMetricsMiddleware() gin.HandlerFunc{ return func(ctx *gin.Context) {
 	endpoint := ctx.FullPath() 
 	method:= ctx.Request.Method 
 	status:=fmt.Sprintf("%d", ctx.Writer.Status()) 
-	metrics.HttpRequestTotal.WithLabelValues(endpoint,status,method).Inc() 
+	metrics.HttpRequestsTotal.WithLabelValues(endpoint,status,method).Inc() 
 	metrics.HttpRequestDuration.WithLabelValues(endpoint,method).Observe(duration) 
 	} 
 }

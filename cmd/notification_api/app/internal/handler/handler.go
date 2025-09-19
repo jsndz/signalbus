@@ -239,6 +239,82 @@ func Publish(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 	}
 }
 
+func (h *NotificationHandler) GetNotification(log *zap.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idStr := c.Param("id")
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid notification id"})
+			return
+		}
+
+		notification, err := h.service.GetNotification(id)
+		if err != nil {
+			log.Error("failed to fetch notification",
+				zap.String("id", idStr),
+				zap.Error(err),
+			)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch notification"})
+			return
+		}
+		if notification == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "notification not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, notification)
+	}
+}
+
+func (h *NotificationHandler) RedriveNotification(log *zap.Logger, p *kafka.Producer) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idStr := c.Param("id")
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid notification id"})
+			return
+		}
+
+		attempt, err := h.service.DLQNotification(id)
+		if err != nil {
+			log.Error("failed to fetch delivery attempts",
+				zap.String("notification_id", idStr),
+				zap.Error(err),
+			)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch delivery attempts"})
+			return
+		}
+
+		if attempt.Status != "dlq" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "no failed delivery attempts found"})
+			return
+		}
+
+		ctx := context.Background()
+		if len(attempt.Message) == 0 {
+			log.Warn("skipping attempt with empty message",
+			zap.String("attempt_id", attempt.ID.String()))
+			
+		}
+
+		topic := "notification." + attempt.Channel
+		key := attempt.NotificationID[:]
+
+		if err := p.Publish(ctx, topic, key, attempt.Message); err != nil {
+			log.Error("failed to republish DLQ message",
+				zap.String("topic", topic),
+				zap.String("attempt_id", attempt.ID.String()),
+				zap.Error(err))
+		}
+
+		log.Info("successfully redrived message",
+		zap.String("topic", topic),
+		zap.String("attempt_id", attempt.ID.String()))
+
+		c.JSON(http.StatusOK, gin.H{"message": "redrive complete"})
+	}
+}
+
 type normalizedPayload struct {
 	RecieverData   map[string]interface{}
 	InTemplateData map[string]interface{}

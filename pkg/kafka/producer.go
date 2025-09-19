@@ -38,10 +38,9 @@ func(p *Producer) Publish(ctx context.Context,topic string, key ,value []byte) e
 	)
 	if err != nil {
 		log.Printf("failed to write messages: %v", err)
-		metrics.KafkaPublisherFailure.WithLabelValues(topic).Inc()
+		metrics.KafkaPublishFailureTotal.WithLabelValues(topic).Inc()
 		return err
 	}
-	metrics.KafkaPublisherSuccess.WithLabelValues(topic).Inc()
 	return nil
 	
 }

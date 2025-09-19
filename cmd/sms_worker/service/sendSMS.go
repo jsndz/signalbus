@@ -110,7 +110,6 @@ func SendSMSWithRetry(
                 LatencyMs:      latency,
             })
 
-            metrics.ExternalAPISuccess.WithLabelValues("twilio", "sms_worker").Inc()
             return nil
         }
 
@@ -138,7 +137,7 @@ func SendSMSWithRetry(
     }
 
     
-    metrics.ExternalAPIFailure.WithLabelValues("twilio", "sms_worker").Inc()
+    metrics.ExternalAPIFailureTotal.WithLabelValues("twilio", "sms_worker").Inc()
     notificationRepo.UpdateStatus(notificationID, "failed")
 
     smsBytes, marshalErr := json.Marshal(sms)
@@ -150,7 +149,7 @@ func SendSMSWithRetry(
         return marshalErr
     }
 
-    producer.Publish(context.Background(), "notification.sms.dlq", []byte(sms.IdempotencyKey), smsBytes)
+    producer.Publish(context.Background(), "notification.sms.dlq", notificationID[:], smsBytes)
 
     logger.Error("Final SMS send failure",
         zap.String("to", sms.To),
