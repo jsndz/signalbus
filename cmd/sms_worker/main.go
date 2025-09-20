@@ -17,7 +17,9 @@ import (
 	"github.com/jsndz/signalbus/pkg/kafka"
 	"github.com/jsndz/signalbus/pkg/repositories"
 	"github.com/jsndz/signalbus/pkg/utils"
+	"github.com/jsndz/signalbus/tracing"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 )
 
@@ -29,7 +31,8 @@ func main() {
 		panic("failed to initialize logger: " + err.Error())
 	}
 	defer logr.Sync()
-
+	cleanup := tracing.InitTracer("sms_worker",logr)
+	defer cleanup()
 	dsn := os.Getenv("TENANT_DB")
 	notification_dns := os.Getenv("NOTIFICATION_DB")
 
@@ -37,7 +40,7 @@ func main() {
 	if err != nil {
 		panic("failed to initialize Database: " + err.Error())
 	}
-
+	tracer := otel.Tracer("notification_api")
 	broker := utils.GetEnv("KAFKA_BROKER")
 	logr.Info("Kafka broker loaded", zap.String("broker", broker))
 	tmplRepo := repositories.NewTemplateRepository(db)
@@ -65,7 +68,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go service.HandleSMS(broker, ctx, sender, logr, tmplRepo,notification_repo,producer)
+	go service.HandleSMS(broker, ctx, sender, logr, tmplRepo,notification_repo,producer,tracer)
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
@@ -95,6 +98,5 @@ func handleShutdown(producer *kafka.Producer, log *zap.Logger) {
 	} else {
 		log.Info("Kafka producer closed cleanly")
 	}
-
 	os.Exit(0)
 }

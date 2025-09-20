@@ -17,7 +17,9 @@ import (
 	"github.com/jsndz/signalbus/pkg/kafka"
 	"github.com/jsndz/signalbus/pkg/repositories"
 	"github.com/jsndz/signalbus/pkg/utils"
+	"github.com/jsndz/signalbus/tracing"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 )
 
@@ -35,6 +37,9 @@ func main() {
 		panic("failed to initialize Database: " + err.Error())
 	}
 	tmpl_repo := repositories.NewTemplateRepository(template_db)
+	cleanup := tracing.InitTracer("sms_worker",logr)
+	defer cleanup()
+		tracer := otel.Tracer("notification_api")
 
 	notification_dns := os.Getenv("NOTIFICATION_DB")
 	notification_db,err := database.InitDB(notification_dns)
@@ -74,7 +79,7 @@ func main() {
 	}
 	logr.Info("Mail service initialized")
 
-	go handler.HandleMail(broker, ctx, Mailer, logr, tmpl_repo,notification_repo,producer)
+	go handler.HandleMail(broker, ctx, Mailer, logr, tmpl_repo,notification_repo,producer,tracer)
 	wrappedMux := middlewares.MetricsMiddleware(mux)
 	go handleShutdown(producer, logr)
 

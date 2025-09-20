@@ -4,13 +4,14 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jsndz/signalbus/cmd/notification_api/app/internal/handler"
 	"github.com/jsndz/signalbus/pkg/kafka"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
-func Notifications(router *gin.RouterGroup,p *kafka.Producer,tdb *gorm.DB,ndb *gorm.DB,log *zap.Logger ){
+func Notifications(router *gin.RouterGroup,p *kafka.Producer,tdb *gorm.DB,ndb *gorm.DB,log *zap.Logger, tracer trace.Tracer ){
 	notificationHandler :=handler.NewNotificationHandler(ndb)
-	router.POST("/",notificationHandler.Notify(p,tdb,ndb,log))
+	router.POST("/",notificationHandler.Notify(p,tdb,ndb,log,tracer))
 	router.GET("/:id",notificationHandler.GetNotification(log))
 	router.POST("/:id/redrive",notificationHandler.RedriveNotification(log,p))
 
