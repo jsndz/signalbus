@@ -102,8 +102,6 @@ var KafkaRebalancesTotal = prometheus.NewCounterVec(
 	[]string{"group"},
 )
 
-
-
 var ExternalAPISuccessTotal = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Name: "external_api_success_total",

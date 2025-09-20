@@ -217,4 +217,6 @@ Pull requests are welcome! Open an issue first for feedback or discussion.
 - [] Publish
 - [] redrive
 - [] Long term rate limiting
-- []
+- [] KafkaConsumerLag
+- [] 
+- [] KafkaRebalancesTotal

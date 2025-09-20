@@ -51,6 +51,7 @@ func main() {
 		panic("Failed to initialize zap logger: " + err.Error())
 	}
 	log.Info("Logger initialized")
+	metrics.InitKafkaMetrics()
 
 	metrics.InitAPIMetrics()
 	producer := kafka.NewProducer([]string{broker})

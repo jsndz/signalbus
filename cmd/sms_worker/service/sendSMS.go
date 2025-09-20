@@ -78,6 +78,7 @@ func  HandleSMS(broker string, ctx context.Context, smsService gosms.Sender, log
 				)
 				continue
 			}
+            
 			sms := gosms.NewSMS(user.To, string(content["text"]), gosms.WithIdempotencyKey(user.IdempotencyKey))
 			SendSMSWithRetry(logger, smsService, sms,producer,msg.NotificationId,notificationRepo)
 		}
@@ -96,7 +97,9 @@ func SendSMSWithRetry(
 
     for attempt := 1; attempt <= maxRetries; attempt++ {
         start := time.Now()
+        apiTimer := prometheus.NewTimer(metrics.ExternalAPIDuration.WithLabelValues("sendgrid", "email"))
         err := smsService.Send(sms)
+        apiTimer.ObserveDuration()
         latency := time.Since(start).Milliseconds()
 
         if err == nil {
@@ -109,10 +112,12 @@ func SendSMSWithRetry(
                 Try:            attempt,
                 LatencyMs:      latency,
             })
-
+            metrics.ExternalAPISuccessTotal.WithLabelValues("sendgrid", "email_worker").Inc()
+            metrics.NotificationsAttemptedTotal.WithLabelValues("sms", "success", "twilio").Inc()
             return nil
         }
-
+        metrics.NotificationRetriesTotal.WithLabelValues("sms", "twilio", "provider_error").Inc()
+        metrics.NotificationsAttemptedTotal.WithLabelValues("sms", "failed", "twilio").Inc()
         notificationRepo.CreateAttempt(&models.DeliveryAttempt{
             NotificationID: notificationID,
             Channel:        "sms",
@@ -136,7 +141,7 @@ func SendSMSWithRetry(
         time.Sleep(waitTime)
     }
 
-    
+    metrics.NotificationsAttemptedTotal.WithLabelValues("sms", "failed", "twilio").Inc()
     metrics.ExternalAPIFailureTotal.WithLabelValues("twilio", "sms_worker").Inc()
     notificationRepo.UpdateStatus(notificationID, "failed")
 
@@ -150,6 +155,7 @@ func SendSMSWithRetry(
     }
 
     producer.Publish(context.Background(), "notification.sms.dlq", notificationID[:], smsBytes)
+	metrics.NotificationDLQTotal.WithLabelValues("provider_error","sms")
 
     logger.Error("Final SMS send failure",
         zap.String("to", sms.To),

@@ -89,8 +89,6 @@ func HandleMail(broker string, ctx context.Context, mailService gomailer.Mailer,
 	}
 }
 
-
-
 func SendEmailWithRetry(
     logger *zap.Logger,
     mailService gomailer.Mailer,
@@ -104,10 +102,14 @@ func SendEmailWithRetry(
 
     for attempt := 1; attempt <= maxRetries; attempt++ {
         start := time.Now()
+        apiTimer := prometheus.NewTimer(metrics.ExternalAPIDuration.WithLabelValues("sendgrid", "email"))
         err := mailService.Send(mail)
+        apiTimer.ObserveDuration()
         latency := time.Since(start).Milliseconds()
 
         if err == nil {
+            metrics.NotificationsAttemptedTotal.WithLabelValues("email", "success", "sendgrid").Inc()
+
             notificationRepo.UpdateStatus(notificationID, "delivered")
             notificationRepo.CreateAttempt(&models.DeliveryAttempt{
                 NotificationID: notificationID,
@@ -118,13 +120,17 @@ func SendEmailWithRetry(
                 LatencyMs:      latency,
             })
             metrics.ExternalAPISuccessTotal.WithLabelValues("sendgrid", "email_worker").Inc()
+            metrics.NotificationsAttemptedTotal.WithLabelValues("email", "success", "sendgrid").Inc()
+
             return nil
         }
+
+        metrics.NotificationsAttemptedTotal.WithLabelValues("email", "failed", "sendgrid").Inc()
 
         backoffDelay := time.Second * time.Duration(1<<(attempt-1))
         jitter := time.Duration(rand.Intn(500)) * time.Millisecond
         waitTime := backoffDelay + jitter
-
+   		metrics.NotificationRetriesTotal.WithLabelValues("email", "sendgrid", "provider_error").Inc()
         notificationRepo.CreateAttempt(&models.DeliveryAttempt{
             NotificationID: notificationID,
             Channel:        "email",
@@ -144,6 +150,7 @@ func SendEmailWithRetry(
         time.Sleep(waitTime)
     }
 
+    metrics.NotificationsAttemptedTotal.WithLabelValues("email", "failed", "sendgrid").Inc()
     metrics.ExternalAPIFailureTotal.WithLabelValues("sendgrid", "email_worker").Inc()
     notificationRepo.UpdateStatus(notificationID, "failed")
 
@@ -162,13 +169,14 @@ func SendEmailWithRetry(
         zap.String("subject", mail.Subject),
     )
 
-	producer.Publish(context.Background(), "notification.email.dlq", notificationID[:], mailBytes)
-	notificationRepo.CreateAttempt(&models.DeliveryAttempt{
-            NotificationID: notificationID,
-            Channel:        "email",
-            Provider:       "sendgrid",
-            Status:         "dlq",
-			Message: mailBytes, 
+    producer.Publish(context.Background(), "notification.email.dlq", notificationID[:], mailBytes)
+	metrics.NotificationDLQTotal.WithLabelValues("provider_error","email")
+    notificationRepo.CreateAttempt(&models.DeliveryAttempt{
+        NotificationID: notificationID,
+        Channel:        "email",
+        Provider:       "sendgrid",
+        Status:         "dlq",
+        Message:        mailBytes,
     })
     return fmt.Errorf("permanent email failure after %d retries", maxRetries)
 }

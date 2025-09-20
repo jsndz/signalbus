@@ -51,6 +51,7 @@ func main() {
 
 
 	metrics.InitWorkerMetrics()
+	metrics.InitKafkaMetrics()
 
 	cfg, err := config.LoadConfig("./config.yaml")
 	if err != nil {

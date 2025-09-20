@@ -50,6 +50,7 @@ func main() {
 	producer := kafka.NewProducer([]string{broker})
 
 	metrics.InitWorkerMetrics()
+	metrics.InitKafkaMetrics()
 
 	mux :=  http.NewServeMux()
 	
