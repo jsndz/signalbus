@@ -116,25 +116,22 @@ services:
     restart: unless-stopped
 
 
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
-    command: ["--config=/etc/otel-collector-config.yaml"]
-    volumes:
-      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
-    ports:
-      - "4317:4317"   
-      - "55681:55681"
+  # otel-collector:
+  #   image: otel/opentelemetry-collector-contrib:latest
+  #   command: ["--config=/etc/otel-collector-config.yaml"]
+  #   volumes:
+  #     - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+  #   ports:
+  #     - "4317:4317"   
+  #     - "55681:55681"
 
-  jaeger:
-    image: jaegertracing/all-in-one:1.56
-    ports:
-      - "16686:16686"
-      - "4317:4317"  
-      - "4318:4318"  
+  # jaeger:
+  #   image: jaegertracing/all-in-one:1.56
+  #   ports:
+  #     - "16686:16686"
+  #     - "4317:4317"  
+  #     - "4318:4318"  
  
-
-
-
 volumes:
   grafana-storage:
   tenant-data:
