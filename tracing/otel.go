@@ -17,8 +17,10 @@ func InitTracer(serviceName string,logr *zap.Logger) func() {
 	ctx:= context.Background()
 
 
-	exporter,err :=otlptracegrpc.New(ctx)
-	if err!=nil{
+	exporter, err := otlptracegrpc.New(ctx,
+		otlptracegrpc.WithEndpoint("jaeger:4317"),
+	)
+		if err!=nil{
 		logr.Fatal(err.Error(), zap.Error(err))
 	}
 

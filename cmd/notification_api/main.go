@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 
 	"github.com/jsndz/signalbus/cmd/notification_api/app/routes"
@@ -21,7 +20,6 @@ import (
 	"github.com/jsndz/signalbus/pkg/kafka"
 	"github.com/jsndz/signalbus/pkg/models"
 	"github.com/jsndz/signalbus/pkg/utils"
-	"github.com/jsndz/signalbus/tracing"
 )
 
 func main() {
@@ -33,10 +31,8 @@ func main() {
 	if err != nil {
 		panic("Failed to initialize zap logger: " + err.Error())
 	}
-	cleanup := tracing.InitTracer("notification_api",log)
-	defer cleanup()
 
-	tracer := otel.Tracer("notification_api")
+
 	broker := utils.GetEnv("KAFKA_BROKER")
 	notification_dns := os.Getenv("NOTIFICATION_DB")
 	notification_db,err := database.InitDB(notification_dns)
@@ -74,7 +70,7 @@ func main() {
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	v1 := router.Group("/api")
-	routes.Notifications(v1.Group("/notify"), producer,tenant_db,notification_db, log, tracer)
+	routes.Notifications(v1.Group("/notify"), producer,tenant_db,notification_db, log)
 	routes.Tenants(v1.Group("/tenants"),tenant_db,log)
 	routes.APIKeys(v1.Group("/keys"),tenant_db,log)
 	routes.Policies(v1.Group("/policies"),tenant_db,log)
