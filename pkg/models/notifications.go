@@ -13,8 +13,6 @@ type Notification struct {
     UserRef   string    `gorm:"size:100;index"`
     Status    string    `gorm:"size:50;not null;index"` // pending, delivered, failed
     CreatedAt time.Time `gorm:"autoCreateTime"`
-
-    Tenant Tenant `gorm:"foreignKey:TenantID;constraint:OnDelete:CASCADE"`
 }
 
 

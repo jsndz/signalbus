@@ -14,7 +14,7 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
   prometheus:
@@ -24,10 +24,10 @@ services:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
-    # depends_on:
-    #   - email
-    #   - sms
-    #   - api
+    depends_on:
+      - email
+      - sms
+      - api
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -41,40 +41,40 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
 
-  # api:
-  #   build:
-  #     context: .
-  #     dockerfile: deployments/Dockerfile.api
-  #   ports:
-  #     - "8080:8080"
-  #   env_file:
-  #     - ".env"
-  #   depends_on:
-  #     - kafka
-  # email:
-  #   build:
-  #     context: .
-  #     dockerfile: deployments/Dockerfile.email
-  #   ports:
-  #     - "3001:3001"
-  #   environment:
-  #     - KAFKA_BROKER=kafka:9092
-  #   env_file:
-  #     - ".env"
-  #   depends_on:
-  #     - kafka
-  # sms:
-  #   build:
-  #     context: .
-  #     dockerfile: deployments/Dockerfile.sms
-  #   ports:
-  #     - "3000:3000"
-  #   environment:
-  #     - KAFKA_BROKER=kafka:9092
-  #   env_file:
-  #     - ".env"
-  #   depends_on:
-  #     - kafka
+  api:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile.api
+    ports:
+      - "3000:3000"
+    env_file:
+      - ".env"
+    depends_on:
+      - kafka
+  email:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile.email
+    ports:
+      - "3001:3001"
+    environment:
+      - KAFKA_BROKER=kafka:9092
+    env_file:
+      - ".env"
+    depends_on:
+      - kafka
+  sms:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile.sms
+    ports:
+      - "3003:3003"
+    environment:
+      - KAFKA_BROKER=kafka:9092
+    env_file:
+      - ".env"
+    depends_on:
+      - kafka
 
   tenant-db:
     image: postgres:15

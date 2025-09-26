@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -57,13 +56,10 @@ func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB,ndb *gorm.D
 		}
 
 		var record models.IdempotencyKey
-		if err := tdb.Where("key = ? AND tenant_id = ?", req.IdempotencyKey, tenant.ID).First(&record).Error; err == nil {
+		err = tdb.Where("key = ? AND tenant_id = ?", req.IdempotencyKey, tenant.ID).First(&record).Error
+		if err == nil {
 			c.Data(record.StatusCode, "application/json", []byte(record.Response))
 			return
-		}
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-		} else  {
-			log.Error("failed to query idempotency key", zap.Error(err))
 		}
 
 
@@ -105,8 +101,11 @@ func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB,ndb *gorm.D
 			for _, channel := range policy.Channels {
 				topic := "notification." + channel
 				for _, pl := range payloads {
-					notification_id,_:= h.service.CreateNotification(policy.TenantID,req.EventType,req.UserRef)	
-					
+
+					notification_id,err:= h.service.CreateNotification(tenant.ID,req.EventType,req.UserRef)	
+					if err != nil {
+						log.Info("error here ")
+					}
 
 					msg := types.KafkaStreamData{
 						IdempotencyKey: req.IdempotencyKey,

@@ -13,5 +13,5 @@ FROM alpine:latest
 
 COPY --from=builder /api_server /api_server
 
-EXPOSE 8080
+EXPOSE 3000
 CMD ["/api_server"]

@@ -150,7 +150,7 @@ func SendEmailWithRetry(
         backoffDelay := time.Second * time.Duration(1<<(attempt-1))
         jitter := time.Duration(rand.Intn(500)) * time.Millisecond
         waitTime := backoffDelay + jitter
-   		metrics.NotificationRetriesTotal.WithLabelValues("email", "sendgrid", "provider_error").Inc()
+   		metrics.NotificationRetriesTotal.WithLabelValues("provider_error","email").Inc()
         notificationRepo.CreateAttempt(&models.DeliveryAttempt{
             NotificationID: notificationID,
             Channel:        "email",

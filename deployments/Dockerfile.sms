@@ -8,11 +8,11 @@ RUN go mod download
 COPY . .
 
 
-RUN go build -o /sms_service ./cmd/sms_worker
+RUN go build -o /sms_worker ./cmd/sms_worker
 
 FROM alpine:latest
 
-COPY --from=builder /sms_service /sms_service
+COPY --from=builder /sms_worker /sms_worker
 
-EXPOSE 3000
-CMD ["/sms_service"]
+EXPOSE 3003
+CMD ["/sms_worker"]
