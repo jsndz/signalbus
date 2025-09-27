@@ -42,8 +42,10 @@ func main() {
 	tenant_dns := os.Getenv("TENANT_DB")
 	tenant_db,err := database.InitDB(tenant_dns)
 	if err != nil {
-		panic("DB not init  " + err.Error())
+		panic("DB not init" + err.Error())
 	}
+	redis_dns := utils.GetEnv("REDIS_CLIENT")
+	redis := database.InitRedis(redis_dns)
 	template_dns := os.Getenv("TEMPLATE_DB")
 	template_db,err := database.InitDB(template_dns)
 	database.MigrateDB(template_db, &models.Template{})
@@ -70,7 +72,7 @@ func main() {
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	v1 := router.Group("/api")
-	routes.Notifications(v1.Group("/notify"), producer,tenant_db,notification_db, log)
+	routes.Notifications(v1.Group("/notify"), producer,tenant_db,notification_db, redis,log)
 	routes.Tenants(v1.Group("/tenants"),tenant_db,log)
 	routes.APIKeys(v1.Group("/keys"),tenant_db,log)
 	routes.Policies(v1.Group("/policies"),tenant_db,log)

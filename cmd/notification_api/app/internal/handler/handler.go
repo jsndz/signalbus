@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -29,9 +30,14 @@ func NewNotificationHandler(db *gorm.DB) *NotificationHandler {
 func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB,ndb *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		s := services.NewTenantService(tdb)
-	
-
-		apiKey := c.GetHeader("X-API-Key")
+		apiKey, _ := c.Get("api_key_id")
+		apiKeyStr, ok := apiKey.(string)
+		if !ok {
+			
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid API KAY"+apiKeyStr})
+			return
+		}
+		idempotencyKey,_ := c.Get("idem_key")
 
 		log.Info("Incoming HTTP request",
 			zap.String("endpoint", "/notify"),
@@ -42,21 +48,21 @@ func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB,ndb *gorm.D
 		var req types.NotifyRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "couldn't unmarshal JSON: " + err.Error(),
 			})
 			return
 		}
 
-		tenant, err := s.GetTenantByAPIKey(apiKey)
+		tenant, err := s.GetTenantByAPIKey(apiKeyStr)
 		if err != nil || tenant == nil {
+			newErr := fmt.Sprintf("invalid API key: %s", err.Error())
 			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "invalid API key",
+				"error": newErr,
 			})
 			return
 		}
 
 		var record models.IdempotencyKey
-		err = tdb.Where("key = ? AND tenant_id = ?", req.IdempotencyKey, tenant.ID).First(&record).Error
+		err = tdb.Where("key = ? AND tenant_id = ?", idempotencyKey, tenant.ID).First(&record).Error
 		if err == nil {
 			c.Data(record.StatusCode, "application/json", []byte(record.Response))
 			return
@@ -194,8 +200,10 @@ func Publish(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 
 		tenantID, err := s.CheckForValidTenant(apiKey)
 		if err != nil || tenantID == uuid.Nil {
+						newErr := fmt.Sprintf("invalid API keys: %s", err.Error())
+
 			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "invalid API key",
+				"error": newErr,
 			})
 			return
 		}
