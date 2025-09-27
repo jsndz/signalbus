@@ -51,6 +51,8 @@ services:
       - ".env"
     depends_on:
       - kafka
+    volumes:
+    - ./config.yaml:/config.yaml
   email:
     build:
       context: .
@@ -63,6 +65,8 @@ services:
       - ".env"
     depends_on:
       - kafka
+    volumes:
+    - ./config.yaml:/config.yaml
   sms:
     build:
       context: .
@@ -75,6 +79,8 @@ services:
       - ".env"
     depends_on:
       - kafka
+    volumes:
+    - ./config.yaml:/config.yaml
 
   tenant-db:
     image: postgres:15
@@ -115,7 +121,14 @@ services:
       - notification-data:/var/lib/postgresql/data
     restart: unless-stopped
 
-
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
   # otel-collector:
   #   image: otel/opentelemetry-collector-contrib:latest
   #   command: ["--config=/etc/otel-collector-config.yaml"]
@@ -137,3 +150,4 @@ volumes:
   tenant-data:
   template-data:
   notification-data:
+  redis-data:
