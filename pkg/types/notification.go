@@ -7,7 +7,6 @@ type NotifyRequest struct {
 	UserRef			string					`json:"user_ref" binding:"required"`
 	UserData       map[string]interface{} `json:"data" binding:"required"`
 	TemplateData   map[string]interface{} `json:"template_data,omitempty"`
-	IdempotencyKey string                 `json:"idempotency_key" binding:"required"`
 }
 
 type KafkaStreamData struct {

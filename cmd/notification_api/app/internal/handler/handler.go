@@ -27,18 +27,20 @@ func NewNotificationHandler(db *gorm.DB) *NotificationHandler {
 	return &NotificationHandler{service: services.NewNotificationService(db)}
 }
 
+
+
 func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB,ndb *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		s := services.NewTenantService(tdb)
-		apiKey, _ := c.Get("api_key_id")
-		apiKeyStr, ok := apiKey.(string)
-		if !ok {
-			
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid API KAY"+apiKeyStr})
+	
+		idem_key := c.GetHeader("X-Idempotency-Key")
+		tenant_id ,exists:= c.Get("tenant_id")
+		if !exists{
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "couldn't get tenant ID " ,
+			})
 			return
 		}
-		idempotencyKey,_ := c.Get("idem_key")
-
 		log.Info("Incoming HTTP request",
 			zap.String("endpoint", "/notify"),
 			zap.String("method", c.Request.Method),
@@ -48,21 +50,28 @@ func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB,ndb *gorm.D
 		var req types.NotifyRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "couldn't unmarshal JSON: " + err.Error(),
 			})
 			return
 		}
 
-		tenant, err := s.GetTenantByAPIKey(apiKeyStr)
+		tenantUUID, ok := tenant_id.(uuid.UUID)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "invalid tenant ID format",
+			})
+			return
+		}
+		tenant, err := s.GetTenant(tenantUUID)
 		if err != nil || tenant == nil {
-			newErr := fmt.Sprintf("invalid API key: %s", err.Error())
 			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": newErr,
+				"error": "invalid API key",
 			})
 			return
 		}
 
 		var record models.IdempotencyKey
-		err = tdb.Where("key = ? AND tenant_id = ?", idempotencyKey, tenant.ID).First(&record).Error
+		err = tdb.Where("key = ? AND tenant_id = ?", idem_key, tenant.ID).First(&record).Error
 		if err == nil {
 			c.Data(record.StatusCode, "application/json", []byte(record.Response))
 			return
@@ -107,23 +116,6 @@ func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB,ndb *gorm.D
 			for _, channel := range policy.Channels {
 				topic := "notification." + channel
 				for _, pl := range payloads {
-
-					notification_id,err:= h.service.CreateNotification(tenant.ID,req.EventType,req.UserRef)	
-					if err != nil {
-						log.Info("error here ")
-					}
-
-					msg := types.KafkaStreamData{
-						IdempotencyKey: req.IdempotencyKey,
-						RecieverData:   pl.RecieverData,
-						InTemplateData: pl.InTemplateData,
-						GetTemplateData: &types.GetTemplateData{
-							EventType: req.EventType,
-							Locale:    locale,
-							TenantID:  tenant.ID,
-						},
-						NotificationId:notification_id,
-					}
 					if channel == "sms"{
 						num ,ok :=pl.RecieverData["to"].(string)
 						if !ok || num == "" {
@@ -137,6 +129,26 @@ func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB,ndb *gorm.D
 						}
 						pl.RecieverData["to"] = to
 					}
+					notification_id,err:= h.service.CreateNotification(tenant.ID,req.EventType,req.UserRef)	
+					if err != nil {
+						log.Error("failed to create notification", zap.Error(err))
+						c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create notification"})
+						return
+					}
+				
+
+					msg := types.KafkaStreamData{
+						IdempotencyKey: idem_key,
+						RecieverData:   pl.RecieverData,
+						InTemplateData: pl.InTemplateData,
+						GetTemplateData: &types.GetTemplateData{
+							EventType: req.EventType,
+							Locale:    locale,
+							TenantID:  tenant.ID,
+						},
+						NotificationId:notification_id,
+					}
+				
 					msgBytes, err := json.Marshal(msg)
 					if err != nil {
 						log.Error("failed to marshal kafka message", zap.Error(err))
@@ -166,7 +178,7 @@ func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB,ndb *gorm.D
 		respBytes, _ := json.Marshal(resp)
 
 		if err := tdb.Create(&models.IdempotencyKey{
-			Key:         req.IdempotencyKey,
+			Key:         idem_key,
 			TenantID:    tenant.ID,
 			RequestHash: reqHash,
 			Response:    string(respBytes),
@@ -177,7 +189,6 @@ func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB,ndb *gorm.D
 		c.JSON(http.StatusAccepted, resp)
 	}
 }
-
 func Publish(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		s := services.NewTenantService(db)

@@ -1,7 +1,7 @@
 email:
   provider: smtp
   smtp:
-    host: localhost
+    host: mailpit
     port: 1025
     username: user@gmail.com
     password: secret
