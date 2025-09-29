@@ -26,6 +26,7 @@ func HandleMail(broker string,
     ctx context.Context, mailService gomailer.Mailer, 
     logger *zap.Logger,tmplRepo *repositories.TemplateRepository,
     notificationRepo *repositories.NotificationRepository,producer *kafka.Producer,
+    provider string,
 ) {
 	topic := "notification.email"
 	c := kafka.NewConsumerFromEnv(topic,"email")
@@ -72,15 +73,15 @@ func HandleMail(broker string,
                         logger.Error("No content provided - neither template nor custom message")
                         return
                     }
-                 } else {
+                 }   else {
                     content ,err := templates.Render(
-                    msg.InTemplateData,
-                    msg.GetTemplateData.TenantID.String(),
-                    "email",
-                    msg.GetTemplateData.EventType,
-                    msg.GetTemplateData.Locale,
-                    []string{"html","text"},
-                    tmplRepo)
+                        msg.InTemplateData,
+                        msg.GetTemplateData.TenantID.String(),
+                        "email",
+                        msg.GetTemplateData.EventType,
+                        msg.GetTemplateData.Locale,
+                        []string{"html","text"},
+                        tmplRepo)
                
                     if err != nil {
                         logger.Error("Coudn't Render template",
@@ -117,7 +118,7 @@ func HandleMail(broker string,
                     gomailer.WithHTML(htmlContent),gomailer.WithText(textContent),
                     gomailer.WithSubject(user.Subject))
 
-                SendEmailWithRetry(logger,mailService,mail,producer,msg.NotificationId,notificationRepo);
+                SendEmailWithRetry(logger,mailService,mail,producer,msg.NotificationId,notificationRepo,provider);
             }()
 		}
 	}
@@ -130,34 +131,36 @@ func SendEmailWithRetry(
     producer *kafka.Producer,
     notificationID uuid.UUID,
     notificationRepo *repositories.NotificationRepository,
+    provider string,
+
 ) error {
-    timer := prometheus.NewTimer(metrics.NotificationSendDuration.WithLabelValues("sendgrid", "email_worker"))
+    timer := prometheus.NewTimer(metrics.NotificationSendDuration.WithLabelValues(provider, "email_worker"))
     defer timer.ObserveDuration()
     for attempt := 1; attempt <= maxRetries; attempt++ {
         start := time.Now()
-        apiTimer := prometheus.NewTimer(metrics.ExternalAPIDuration.WithLabelValues("sendgrid", "email"))
-        err := mailService.Send(mail)
+        apiTimer := prometheus.NewTimer(metrics.ExternalAPIDuration.WithLabelValues(provider, "email"))
+        _,err := mailService.Send(mail)
         apiTimer.ObserveDuration()
         latency := time.Since(start).Milliseconds()
 
         if err == nil {
-            metrics.NotificationsAttemptedTotal.WithLabelValues("email", "success", "sendgrid").Inc()
+            metrics.NotificationsAttemptedTotal.WithLabelValues("email", "success", provider).Inc()
 
             notificationRepo.UpdateStatus(notificationID, "delivered")
             notificationRepo.CreateAttempt(&models.DeliveryAttempt{
                 NotificationID: notificationID,
                 Channel:        "email",
-                Provider:       "sendgrid",
+                Provider:       provider,
                 Status:         "delivered",
                 Try:            attempt,
                 LatencyMs:      latency,
             })
-            metrics.ExternalAPISuccessTotal.WithLabelValues("sendgrid", "email_worker").Inc()
-            metrics.NotificationsAttemptedTotal.WithLabelValues("email", "success", "sendgrid").Inc()
+            metrics.ExternalAPISuccessTotal.WithLabelValues(provider, "email_worker").Inc()
+            metrics.NotificationsAttemptedTotal.WithLabelValues("email", "success", provider).Inc()
 
             return nil
         }
-        metrics.NotificationsAttemptedTotal.WithLabelValues("email", "failed", "sendgrid").Inc()
+        metrics.NotificationsAttemptedTotal.WithLabelValues("email", "failed", provider).Inc()
 
         backoffDelay := time.Second * time.Duration(1<<(attempt-1))
         jitter := time.Duration(rand.Intn(500)) * time.Millisecond
@@ -166,7 +169,7 @@ func SendEmailWithRetry(
         notificationRepo.CreateAttempt(&models.DeliveryAttempt{
             NotificationID: notificationID,
             Channel:        "email",
-            Provider:       "sendgrid",
+            Provider:       provider,
             Status:         "retrying",
             Error:          err.Error(),
             Try:            attempt,
@@ -182,8 +185,8 @@ func SendEmailWithRetry(
         time.Sleep(waitTime)
     }
 
-    metrics.NotificationsAttemptedTotal.WithLabelValues("email", "failed", "sendgrid").Inc()
-    metrics.ExternalAPIFailureTotal.WithLabelValues("sendgrid", "email_worker").Inc()
+    metrics.NotificationsAttemptedTotal.WithLabelValues("email", "failed",provider).Inc()
+    metrics.ExternalAPIFailureTotal.WithLabelValues(provider, "email_worker").Inc()
     notificationRepo.UpdateStatus(notificationID, "failed")
 
     mailBytes, mErr := json.Marshal(mail)
@@ -211,7 +214,7 @@ func SendEmailWithRetry(
     notificationRepo.CreateAttempt(&models.DeliveryAttempt{
         NotificationID: notificationID,
         Channel:        "email",
-        Provider:       "sendgrid",
+        Provider:       provider,
         Status:         "dlq",
         Message:        mailBytes,
     })

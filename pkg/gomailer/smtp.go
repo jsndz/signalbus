@@ -11,8 +11,11 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/jsndz/signalbus/pkg/types"
 )
 type SMTPMailer struct {
+	Provider        string
 	Host            string            `yaml:"host"`
 	Port            int               `yaml:"port"`
 	Username        string            `yaml:"username"`
@@ -42,7 +45,7 @@ func (m *SMTPMailer) tlsConfig()*tls.Config{
 	}
 }
 
-func (m *SMTPMailer) Send (email Email) error{
+func (m *SMTPMailer) Send (email Email) (*types.SendResponse,error){
 	var msg strings.Builder
 
 	msg.WriteString(fmt.Sprintf("From: %s\r\n", email.From))
@@ -70,7 +73,7 @@ func (m *SMTPMailer) Send (email Email) error{
 		for _, path := range email.Attachments {
 			data, err := os.ReadFile(path)
 			if err != nil {
-				return err
+				return nil,err
 			}
 			encoded := base64.StdEncoding.EncodeToString(data)
 			filename := filepath.Base(path)
@@ -108,7 +111,7 @@ func (m *SMTPMailer) Send (email Email) error{
 	dialer := net.Dialer{Timeout: m.Timeout}
 	conn, err := dialer.DialContext(m.Ctx,"tcp",smtpAddr)
 	if err != nil {
-		return err
+		return nil,err
 	}
 
 	var client *smtp.Client
@@ -120,43 +123,48 @@ func (m *SMTPMailer) Send (email Email) error{
 		if err == nil {
 			if ok, _ := client.Extension("STARTTLS"); ok {
 				if err = client.StartTLS(m.tlsConfig()); err != nil {
-					return err
+					return nil, err
 				}
 			}
 		}
 	}
 	if err != nil {
-		return err
+		return nil,err
 	}
 	defer client.Close()
 
 	if m.UseAuth {
 		if ok, _ := client.Extension("AUTH"); ok {
 			if err = client.Auth(auth); err != nil {
-				return err
+				return nil,err
 			}
 		}
 	}
 
 	if err = client.Mail(email.From); err != nil {
-		return err
+		return nil,err
 	}
 	for _, recipient := range email.To {
 		if err = client.Rcpt(recipient); err != nil {
-			return err
+			return nil,err
 		}
 	}
 
 	w, err := client.Data()
 	if err != nil {
-		return err
+		return nil,err
 	}
 	if _, err = w.Write([]byte(msg.String())); err != nil {
-		return err
+		return nil,err
 	}
 	if err = w.Close(); err != nil {
-		return err
+		return nil,err
 	}
-
-	return client.Quit()
+	res := &types.SendResponse{
+		Provider: "sendgrid",
+		ProviderID: "",
+		Status:     "accepted",
+		Timestamp:  time.Now(),
+	}
+	return res,client.Quit()
 }

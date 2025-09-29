@@ -4,11 +4,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/jsndz/signalbus/pkg/types"
 	"github.com/twilio/twilio-go"
 	api "github.com/twilio/twilio-go/rest/api/v2010"
 )
 
-type TwilioSender struct{		
+type TwilioSender struct{	
+	Provider 		string 	
 	Username         string `yaml:"username"`
 	Password 		string `yaml:"password"`
 	FromNumber        string          `yaml:"fromNumber"`
@@ -33,7 +35,7 @@ func NewTwilioSender(accountSid,authToken,fromNumber string) *TwilioSender {
 	}
 }
 
-func (t *TwilioSender) Send(s SMS) error {
+func (t *TwilioSender) Send(s SMS) (*types.SendResponse,error) {
 	params := &api.CreateMessageParams{}
 	params.SetBody(s.Text)
 	params.SetFrom(t.FromNumber)
@@ -41,10 +43,15 @@ func (t *TwilioSender) Send(s SMS) error {
 
 	resp, err := t.Client.Api.CreateMessage(params)
 	if err != nil {
-		return err
+		return nil,err
 	}
-	if resp.Sid != nil {
-		return nil
+
+	res := &types.SendResponse{
+		Provider: "twilio",
+		ProviderID: *resp.Sid,
+		Status:     "accepted",
+		RawResponse: []byte(*resp.Body),
+		Timestamp:  time.Now(),
 	}
-	return nil
+	return res,nil
 }

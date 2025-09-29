@@ -47,6 +47,7 @@ func BuildMailer(cfg *Config) (gomailer.Mailer, error) {
 			return nil, fmt.Errorf("missing smtp config for email provider")
 		}
 		return &gomailer.SMTPMailer{
+			Provider :"smtp",
 			Host:     cfg.Email.SMTP.Host,
 			Port:     cfg.Email.SMTP.Port,
 			Username: cfg.Email.SMTP.Username,
@@ -60,6 +61,8 @@ func BuildMailer(cfg *Config) (gomailer.Mailer, error) {
 			return nil, fmt.Errorf("missing sendgrid config for email provider")
 		}
 		return &gomailer.SendGridMailer{
+			Provider :"sendgrid",
+
 			APIKey:   cfg.Email.SendGrid.APIKey,
 			BaseURL:  cfg.Email.SendGrid.BaseURL,
 			FromName: cfg.Email.SendGrid.FromName,
@@ -79,6 +82,7 @@ func BuildSender(cfg *Config) (gosms.Sender, error) {
 				return nil, fmt.Errorf("missing sms config for sms provider")
 			}
 			return &gosms.TwilioSender{
+				Provider :"twilio",
 				FromNumber: cfg.SMS.Twilio.FromNumber,
 				Username: cfg.SMS.Twilio.Username,
 				Password: cfg.SMS.Twilio.Password,

@@ -64,7 +64,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go service.HandleSMS(broker, ctx, sender, logr, tmplRepo,notification_repo,producer)
+	go service.HandleSMS(broker, ctx, sender, logr, tmplRepo,notification_repo,producer,cfg.SMS.Provider)
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())

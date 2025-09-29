@@ -29,6 +29,8 @@ func HandleSMS(
     tmplRepo *repositories.TemplateRepository,
     notificationRepo *repositories.NotificationRepository,
     producer *kafka.Producer,
+        provider string,
+
 ) {
     topic := "notification.sms"
     c := kafka.NewConsumerFromEnv(topic, "sms")
@@ -129,7 +131,7 @@ func HandleSMS(
                     sms, 
                     producer, 
                     msg.NotificationId, 
-                    notificationRepo,
+                    notificationRepo,provider,
                 )
             }()
         }
@@ -142,13 +144,15 @@ func SendSMSWithRetry(
     producer *kafka.Producer,
     notificationID uuid.UUID,
     notificationRepo *repositories.NotificationRepository,
+        provider string,
+
 ) error {
-    timer := prometheus.NewTimer(metrics.NotificationSendDuration.WithLabelValues("twilio", "sms_worker"))
+    timer := prometheus.NewTimer(metrics.NotificationSendDuration.WithLabelValues(provider, "sms_worker"))
     defer timer.ObserveDuration()
     for attempt := 1; attempt <= maxRetries; attempt++ {
         start := time.Now()
-        apiTimer := prometheus.NewTimer(metrics.ExternalAPIDuration.WithLabelValues("sendgrid", "email"))
-        err := smsService.Send(sms)
+        apiTimer := prometheus.NewTimer(metrics.ExternalAPIDuration.WithLabelValues(provider, "email"))
+        resp,err := smsService.Send(sms)
         apiTimer.ObserveDuration()
         latency := time.Since(start).Milliseconds()
 
@@ -157,21 +161,21 @@ func SendSMSWithRetry(
             notificationRepo.CreateAttempt(&models.DeliveryAttempt{
                 NotificationID: notificationID,
                 Channel:        "sms",
-                Provider:       "twilio",
+                Provider:       provider,
                 Status:         "delivered",
                 Try:            attempt,
                 LatencyMs:      latency,
             })
-            metrics.ExternalAPISuccessTotal.WithLabelValues("sendgrid", "email_worker").Inc()
-            metrics.NotificationsAttemptedTotal.WithLabelValues("sms", "success", "twilio").Inc()
+            metrics.ExternalAPISuccessTotal.WithLabelValues(provider, "email_worker").Inc()
+            metrics.NotificationsAttemptedTotal.WithLabelValues("sms", "success", provider).Inc()
             return nil
         }
-        metrics.NotificationRetriesTotal.WithLabelValues("sms", "twilio", "provider_error").Inc()
-        metrics.NotificationsAttemptedTotal.WithLabelValues("sms", "failed", "twilio").Inc()
+        metrics.NotificationRetriesTotal.WithLabelValues("sms", provider, "provider_error").Inc()
+        metrics.NotificationsAttemptedTotal.WithLabelValues("sms", "failed", provider).Inc()
         notificationRepo.CreateAttempt(&models.DeliveryAttempt{
             NotificationID: notificationID,
             Channel:        "sms",
-            Provider:       "twilio",
+            Provider:       provider,
             Status:         "failed",
             Error:          err.Error(),
             Try:            attempt,
@@ -191,8 +195,8 @@ func SendSMSWithRetry(
         time.Sleep(waitTime)
     }
 
-    metrics.NotificationsAttemptedTotal.WithLabelValues("sms", "failed", "twilio").Inc()
-    metrics.ExternalAPIFailureTotal.WithLabelValues("twilio", "sms_worker").Inc()
+    metrics.NotificationsAttemptedTotal.WithLabelValues("sms", "failed", provider).Inc()
+    metrics.ExternalAPIFailureTotal.WithLabelValues(provider, "sms_worker").Inc()
     notificationRepo.UpdateStatus(notificationID, "failed")
 
     smsBytes, marshalErr := json.Marshal(sms)

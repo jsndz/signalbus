@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
+	"github.com/jsndz/signalbus/pkg/types"
 	"github.com/sendgrid/sendgrid-go"
 	"github.com/sendgrid/sendgrid-go/helpers/mail"
 )
 
 type SendGridMailer struct{
+	Provider        string
 	APIKey          string            `yaml:"apiKey"`
     BaseURL         string            `yaml:"baseURL"`
     Timeout         time.Duration     `yaml:"timeout"`
@@ -34,7 +37,7 @@ func NewSendGridMailer(apiKey, fromName, fromMail string) *SendGridMailer {
 	}
 }
 
-func (s *SendGridMailer) Send(e Email) error {
+func (s *SendGridMailer) Send(e Email) (*types.SendResponse,error) {
 	from := mail.NewEmail(s.FromName, e.From)
 
 	var recipients []*mail.Email
@@ -61,7 +64,7 @@ func (s *SendGridMailer) Send(e Email) error {
 	body := mail.GetRequestBody(message)
 	request,err := http.NewRequestWithContext(s.Ctx, "POST", "https://api.sendgrid.com/v3/mail/send",bytes.NewReader(body))
 	if err != nil {
-		return err
+		return nil,err
 	}
 	request.Header.Set("Authorization", "Bearer "+s.APIKey)
 	request.Header.Set("Content-Type", "application/json")
@@ -74,13 +77,21 @@ func (s *SendGridMailer) Send(e Email) error {
 	client := &http.Client{Timeout: s.Timeout}
 	resp,err:=client.Do(request)
 	if err != nil {
-		return fmt.Errorf("sendgrid send error: %w", err)
+		return nil,fmt.Errorf("sendgrid send error: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("sendgrid API error: %d %s", resp.StatusCode, resp.Body)
+		return nil,fmt.Errorf("sendgrid API error: %d %s", resp.StatusCode, resp.Body)
 	}
+	bodyBytes, _ := io.ReadAll(resp.Body)
 
-	return nil
+	res := &types.SendResponse{
+		Provider: "sendgrid",
+		ProviderID: "",
+		Status:     "accepted",
+		RawResponse: bodyBytes,
+		Timestamp:  time.Now(),
+	}
+	return res,nil
 }

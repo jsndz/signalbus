@@ -81,7 +81,7 @@ func TestSendMail(t *testing.T)  {
 		gomailer.WithSubject("Hello Mailpit"),
 		gomailer.WithText("This is a test email"),
 	)
-	if err := mailer.Send(email); err != nil {
+	if _,err := mailer.Send(email); err != nil {
 		t.Fatalf("failed to send email: %v", err)
 	}
 	time.Sleep(200 * time.Millisecond)

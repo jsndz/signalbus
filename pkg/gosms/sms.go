@@ -1,7 +1,9 @@
 package gosms
 
+import "github.com/jsndz/signalbus/pkg/types"
+
 type Sender interface {
-	Send (SMS) error
+	Send (SMS) (*types.SendResponse,error)
 }
 
 

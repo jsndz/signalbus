@@ -75,7 +75,7 @@ func main() {
 	}
 	logr.Info("Mail service initialized")
 
-	go handler.HandleMail(broker, ctx, Mailer, logr, tmpl_repo,notification_repo,producer)
+	go handler.HandleMail(broker, ctx, Mailer, logr, tmpl_repo,notification_repo,producer,cfg.Email.Provider)
 	wrappedMux := middlewares.MetricsMiddleware(mux)
 	go handleShutdown(producer, logr)
 

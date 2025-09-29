@@ -31,7 +31,7 @@ func main() {
 		IdempotencyKey: "example-12345",
 	}
 
-	if err := mailer.Send(email); err != nil {
+	if _,err := mailer.Send(email); err != nil {
 		log.Fatalf("failed to send email: %v", err)
 	}
 
