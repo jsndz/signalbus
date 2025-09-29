@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -157,7 +156,6 @@ func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB,ndb *gorm.D
 					ctx := c.Request.Context()
 					key := []byte(tenant.ID.String())
 					if err := p.Publish(ctx, topic, key, msgBytes); err != nil {
-
 						log.Error("failed to publish message", zap.String("topic", topic), zap.Error(err))
 					} else {
 						log.Debug("published message", zap.String("topic", topic), zap.String("tenant", tenant.ID.String()))
@@ -189,76 +187,125 @@ func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB,ndb *gorm.D
 		c.JSON(http.StatusAccepted, resp)
 	}
 }
-func Publish(p *kafka.Producer, db *gorm.DB, log *zap.Logger) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		s := services.NewTenantService(db)
-		apiKey := c.GetHeader("X-API-Key")
-		topicParam := c.Param("topic")
+func (h *NotificationHandler) Publish(p *kafka.Producer, tdb *gorm.DB, ndb *gorm.DB, log *zap.Logger) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        idem_key := c.GetHeader("X-Idempotency-Key")
+        tenant_id, exists := c.Get("tenant_id")
+        
+        if !exists {
+            c.JSON(http.StatusBadRequest, gin.H{"error": "couldn't get tenant ID"})
+            return
+        }
 
-		log.Info("Incoming HTTP request",
-			zap.String("endpoint", "/publish/"+topicParam),
-			zap.String("method", c.Request.Method),
-			zap.String("client_ip", c.ClientIP()),
-		)
+        tenantID, ok := tenant_id.(uuid.UUID)
+        if !ok {
+            c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tenant ID format"})
+            return
+        }
 
-		var req types.PublishRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "couldn't unmarshal JSON: " + err.Error(),
-			})
-			return
-		}
+        var record models.IdempotencyKey
+        err := tdb.Where("key = ? AND tenant_id = ?", idem_key, tenantID).First(&record).Error
+        if err == nil {
+            c.Data(record.StatusCode, "application/json", []byte(record.Response))
+            return
+        }
 
-		tenantID, err := s.CheckForValidTenant(apiKey)
-		if err != nil || tenantID == uuid.Nil {
-						newErr := fmt.Sprintf("invalid API keys: %s", err.Error())
+        var req types.PublishRequest
+        if err := c.ShouldBindJSON(&req); err != nil {
+            c.JSON(http.StatusBadRequest, gin.H{"error": "couldn't unmarshal JSON: " + err.Error()})
+            return
+        }
 
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": newErr,
-			})
-			return
-		}
+        reqBytes, _ := json.Marshal(struct {
+            EventType    string                 `json:"event_type"`
+            Channel      string                 `json:"channel"`
+            Data         map[string]interface{} `json:"data"`
+            TextMessage  string                 `json:"text_message,omitempty"`
+            HTMLMessage  string                 `json:"html_message,omitempty"`
+        }{
+            EventType:   req.EventType,
+            Channel:     req.Channel,
+            Data:        req.UserData,
+            TextMessage: req.TextMessage,
+            HTMLMessage: req.HTMLMessage,
+        })
 
-		var record models.IdempotencyKey
-		if err := db.Where("key = ? AND tenant_id = ?", req.IdempotencyKey, tenantID).First(&record).Error; err == nil {
-			c.Data(record.StatusCode, "application/json", []byte(record.Response))
-			return
-		}
+        sum := sha256.Sum256(reqBytes)
+        reqHash := hex.EncodeToString(sum[:])
 
-		msg := types.PublishMessage{
-			IdempotencyKey: req.IdempotencyKey,
-			Content:        req.Message,
-		}
-		msgBytes, err := json.Marshal(msg)
-		if err != nil {
-			log.Error("failed to marshal message", zap.Error(err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-			return
-		}
+        payloads, err := splitPayload(req.UserData, nil)
+        if err != nil {
+            log.Error("failed to split payload", zap.Error(err))
+            c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+            return
+        }
 
-		ctx := context.Background()
-		if err := p.Publish(ctx, "notification." + topicParam, []byte(tenantID.String()), msgBytes); err != nil {
-			log.Error("failed to publish message", zap.String("topic", topicParam), zap.Error(err))
-		}
+        topic := "notification." + req.Channel
 
-		resp := gin.H{"message": "Notification accepted"}
-		respBytes, _ := json.Marshal(resp)
+        if req.Channel == "sms" {
+            for _, pl := range payloads {
+                num, ok := pl.RecieverData["to"].(string)
+                if !ok || num == "" {
+                    c.JSON(http.StatusBadRequest, gin.H{"error": "missing or invalid 'to' field for SMS"})
+                    return
+                }
+                to, err := gosms.NormalizeSMS(num)
+                if err != nil {
+                    c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+                    return
+                }
+                pl.RecieverData["to"] = to
+            }
+        }
 
-		sum := sha256.Sum256(msgBytes)
-		reqHash := hex.EncodeToString(sum[:])
+        for _, pl := range payloads {
+            notification_id, err := h.service.CreateNotification(tenantID, req.EventType, req.UserRef)
+            if err != nil {
+                log.Error("failed to create notification", zap.Error(err))
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create notification"})
+                return
+            }
 
-		if err := db.Create(&models.IdempotencyKey{
-			Key:         req.IdempotencyKey,
-			TenantID:    tenantID,
-			RequestHash: reqHash,
-			Response:    string(respBytes),
-			StatusCode:  http.StatusAccepted,
-		}).Error; err != nil {
-			log.Error("failed to create idempotency record", zap.Error(err))
-		}
+            msg := types.KafkaStreamData{
+                IdempotencyKey: idem_key,
+                RecieverData:   pl.RecieverData,
+                TextMessage:    req.TextMessage,  
+                HTMLMessage:    req.HTMLMessage,  
+                NotificationId: notification_id,
+              
+            }
 
-		c.JSON(http.StatusAccepted, resp)
-	}
+            msgBytes, err := json.Marshal(msg)
+            if err != nil {
+                log.Error("failed to marshal kafka message", zap.Error(err))
+                continue
+            }
+
+            ctx := c.Request.Context()
+            key := []byte(tenantID.String())
+            
+            if err := p.Publish(ctx, topic, key, msgBytes); err != nil {
+                log.Error("failed to publish message", zap.String("topic", topic), zap.Error(err))
+            } else {
+                log.Debug("published message", zap.String("topic", topic), zap.String("tenant", tenantID.String()))
+            }
+        }
+
+        resp := gin.H{"message": "Notification published"}
+        respBytes, _ := json.Marshal(resp)
+
+        if err := tdb.Create(&models.IdempotencyKey{
+            Key:         idem_key,
+            TenantID:    tenantID,
+            RequestHash: reqHash,
+            Response:    string(respBytes),
+            StatusCode:  http.StatusAccepted,
+        }).Error; err != nil {
+            log.Error("failed to create idempotency record", zap.Error(err))
+        }
+
+        c.JSON(http.StatusAccepted, resp)
+    }
 }
 
 func (h *NotificationHandler) GetNotification(log *zap.Logger) gin.HandlerFunc {

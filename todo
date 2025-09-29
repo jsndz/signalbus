@@ -426,7 +426,7 @@ Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship af
 - [x] Implement **SMTP** driver (tested against Mailpit + Gmail app password).
 - [x] Implement **Mailgun** driver.
 - [x] Context timeouts, retries at library level (optional).
-- [x] Unit tests with provider fakes; example CLI.
+- [x] Unit tests with provider fakes.
 - [x] Email worker consumes `notifications.email` with retry + DLQ.
 - [x] Prometheus metrics; JSON logs; config for primary/fallback provider.
 
@@ -444,7 +444,7 @@ Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship af
 - [x] `/publish/:topic` and `/notify` (policy fan-out).
 - [x] API key auth
 - [x] short term rate limit middleware.
-- [ ] long term rate limit middleware.
+- [x] long term rate limit middleware.
 - [x] Idempotency keys (DB unique index + cache).
 - [ ] OpenAPI spec + Swagger UI.
 - [x] Idempotent Kafka producer keyed by user.
@@ -475,7 +475,7 @@ Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship af
 
 - [x] Tenant column everywhere;
 - [x] scoped queries.(almost)
-- [ ] Quotas & per-tenant rate limits.
+- [x] Quotas & per-tenant rate limits.
 - [ ] API key rotation endpoints.
 - [ ] Usage metrics and basic billing counters.
 

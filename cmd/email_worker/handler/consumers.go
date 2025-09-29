@@ -62,9 +62,18 @@ func HandleMail(broker string,
                         zap.Error(err),
                     )
                     return
-                }                
-
-                content ,err := templates.Render(
+                }    
+                var htmlContent, textContent string            
+                if msg.GetTemplateData == nil {
+                    htmlContent = msg.HTMLMessage
+                    textContent = msg.TextMessage
+                    
+                    if htmlContent == "" && textContent == "" {
+                        logger.Error("No content provided - neither template nor custom message")
+                        return
+                    }
+                 } else {
+                    content ,err := templates.Render(
                     msg.InTemplateData,
                     msg.GetTemplateData.TenantID.String(),
                     "email",
@@ -72,13 +81,16 @@ func HandleMail(broker string,
                     msg.GetTemplateData.Locale,
                     []string{"html","text"},
                     tmplRepo)
-                if err != nil {
-
-                    logger.Error("Coudn't Render template",
-                        zap.Any("recieverData", msg.RecieverData),
-                        zap.Error(err),
-                    )
-                    return
+               
+                    if err != nil {
+                        logger.Error("Coudn't Render template",
+                            zap.Any("recieverData", msg.RecieverData),
+                            zap.Error(err),
+                        )
+                        return
+                    }
+                    htmlContent = string(content["html"])
+                    textContent = string(content["text"])
                 }
                 logger.Info("Kafka message received",
                     zap.String("topic", topic),
@@ -102,7 +114,7 @@ func HandleMail(broker string,
                 return
                 }
                 mail := gomailer.NewEmail(user.From,user.To,
-                    gomailer.WithHTML(string(content["html"])),gomailer.WithText(string(content["text"])),
+                    gomailer.WithHTML(htmlContent),gomailer.WithText(textContent),
                     gomailer.WithSubject(user.Subject))
 
                 SendEmailWithRetry(logger,mailService,mail,producer,msg.NotificationId,notificationRepo);

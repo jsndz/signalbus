@@ -22,58 +22,44 @@ import (
 const maxRetries = 3
 
 
-
-func  HandleSMS(
-    broker string, ctx context.Context, 
-    smsService gosms.Sender, 
+func HandleSMS(
+    broker string, ctx context.Context,
+    smsService gosms.Sender,
     logger *zap.Logger,
     tmplRepo *repositories.TemplateRepository,
     notificationRepo *repositories.NotificationRepository,
     producer *kafka.Producer,
 ) {
-	topic:= "notification.sms"
-	c := kafka.NewConsumerFromEnv(topic,"sms")
-	defer c.Close()
-
-	logger.Info("Starting Kafka consumer", zap.String("topic", topic), zap.String("broker", broker))
-
-	for {
-		select{
-		case <-ctx.Done():
-			logger.Info("Shutting down SignupConsumer", zap.String("topic", topic))
-			return
-		default:
-			m,err:= c.ReadFromKafka(ctx)
-            if err!= nil{
-                    logger.Error("Error reading Kafka message", zap.String("topic", topic), zap.Error(err))
-                    continue
-                }
+    topic := "notification.sms"
+    c := kafka.NewConsumerFromEnv(topic, "sms")
+    defer c.Close()
+    
+    logger.Info("Starting Kafka consumer", zap.String("topic", topic), zap.String("broker", broker))
+    
+    for {
+        select {
+        case <-ctx.Done():
+            logger.Info("Shutting down SMS Consumer", zap.String("topic", topic))
+            return
+        default:
+            m, err := c.ReadFromKafka(ctx)
+            if err != nil {
+                logger.Error("Error reading Kafka message", zap.String("topic", topic), zap.Error(err))
+                continue
+            }
+            
             if len(m.Headers) > 0 {
-                 carrier := make(map[string]string)
+                carrier := make(map[string]string)
                 for _, h := range m.Headers {
                     carrier[h.Key] = string(h.Value)
                 }
-                
             }
-            func(){
-                
+            
+            func() {
                 var msg types.KafkaStreamData
                 if err := json.Unmarshal(m.Value, &msg); err != nil {
-                   
                     logger.Error("Failed to unmarshal SMS message",
                         zap.ByteString("raw", m.Value),
-                        zap.Error(err),
-                    )
-                    return
-                }
-
-                content ,err := templates.Render(msg.RecieverData,
-                    msg.GetTemplateData.TenantID.String(),
-                    msg.GetTemplateData.EventType,string(m.Key),
-                    msg.GetTemplateData.Locale,[]string{"html","text"},tmplRepo)
-                if err != nil {
-                    logger.Error("Coudn't Render template",
-                        zap.Any("recieverData", msg.RecieverData),
                         zap.Error(err),
                     )
                     return
@@ -84,6 +70,35 @@ func  HandleSMS(
                     zap.ByteString("key", m.Key),
                     zap.Int64("offset", m.Offset),
                 )
+
+                var textContent string
+
+                if msg.GetTemplateData != nil {
+                    content, err := templates.Render(
+                        msg.InTemplateData,
+                        msg.GetTemplateData.TenantID.String(),
+                        "sms",  
+                        msg.GetTemplateData.EventType,
+                        msg.GetTemplateData.Locale,
+                        []string{"text"},
+                        tmplRepo,
+                    )
+                    if err != nil {
+                        logger.Error("Couldn't render template",
+                            zap.Any("recieverData", msg.RecieverData),
+                            zap.Error(err),
+                        )
+                        return
+                    }
+                    textContent = string(content["text"])
+                } else {
+                    textContent = msg.TextMessage
+                    if textContent == "" {
+                        logger.Error("No content provided - neither template nor custom message")
+                        return
+                    }
+                }
+
                 var user gosms.SMS
                 recieverDataBytes, err := json.Marshal(msg.RecieverData)
                 if err != nil {
@@ -93,6 +108,7 @@ func  HandleSMS(
                     )
                     return
                 }
+                
                 if err := json.Unmarshal(recieverDataBytes, &user); err != nil {
                     logger.Error("Failed to unmarshal SMS user",
                         zap.ByteString("raw", recieverDataBytes),
@@ -100,12 +116,24 @@ func  HandleSMS(
                     )
                     return
                 }
+
+                sms := gosms.NewSMS(
+                    user.To, 
+                    textContent, 
+                    gosms.WithIdempotencyKey(msg.IdempotencyKey), 
+                )
                 
-                sms := gosms.NewSMS(user.To, string(content["text"]), gosms.WithIdempotencyKey(user.IdempotencyKey))
-                SendSMSWithRetry(logger, smsService, sms,producer,msg.NotificationId,notificationRepo)
+                SendSMSWithRetry(
+                    logger, 
+                    smsService, 
+                    sms, 
+                    producer, 
+                    msg.NotificationId, 
+                    notificationRepo,
+                )
             }()
-            }
-	}
+        }
+    }
 }
 func SendSMSWithRetry(
     logger *zap.Logger,

@@ -18,6 +18,7 @@ func Notifications(router *gin.RouterGroup,p *kafka.Producer,tdb *gorm.DB,ndb *g
 	}
 	
 	router.POST("/",middlewares.NotificationMiddleware(&notifyMiddleware),notificationHandler.Notify(p,tdb,ndb,log))
+	router.POST("/publish",middlewares.NotificationMiddleware(&notifyMiddleware),notificationHandler.Publish(p,tdb,ndb,log))
 	router.GET("/:id",notificationHandler.GetNotification(log))
 	router.POST("/:id/redrive",notificationHandler.RedriveNotification(log,p))
 }
