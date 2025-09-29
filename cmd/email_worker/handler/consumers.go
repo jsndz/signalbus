@@ -17,6 +17,10 @@ import (
 	"github.com/jsndz/signalbus/pkg/templates"
 	"github.com/jsndz/signalbus/pkg/types"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -26,7 +30,7 @@ func HandleMail(broker string,
     ctx context.Context, mailService gomailer.Mailer, 
     logger *zap.Logger,tmplRepo *repositories.TemplateRepository,
     notificationRepo *repositories.NotificationRepository,producer *kafka.Producer,
-    provider string,
+    provider string,tracer trace.Tracer,
 ) {
 	topic := "notification.email"
 	c := kafka.NewConsumerFromEnv(topic,"email")
@@ -46,24 +50,28 @@ func HandleMail(broker string,
 				logger.Error("Error reading Kafka message", zap.String("topic", topic), zap.Error(err))
 				continue
 			}
+            msgCtx := ctx
             if len(m.Headers) > 0 {
                  carrier := make(map[string]string)
                 for _, h := range m.Headers {
                     carrier[h.Key] = string(h.Value)
                 }
-                
+                msgCtx = otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(carrier))
             }
+            emailCtx, span := tracer.Start(msgCtx, "handle-email")
             func(){
-                
+                defer span.End() 
                 var msg types.KafkaStreamData
                 if err := json.Unmarshal(m.Value, &msg); err != nil {
-                 
+
                     logger.Error("Failed to unmarshal SMS message",
                         zap.ByteString("raw", m.Value),
                         zap.Error(err),
                     )
                     return
                 }    
+                 _, tmplspan := tracer.Start(emailCtx, "template extraction")
+
                 var htmlContent, textContent string            
                 if msg.GetTemplateData == nil {
                     htmlContent = msg.HTMLMessage
@@ -84,12 +92,14 @@ func HandleMail(broker string,
                         tmplRepo)
                
                     if err != nil {
+                        tmplspan.SetStatus(codes.Error, "couldn't extract template")
                         logger.Error("Coudn't Render template",
                             zap.Any("recieverData", msg.RecieverData),
                             zap.Error(err),
                         )
                         return
                     }
+                    defer tmplspan.End()
                     htmlContent = string(content["html"])
                     textContent = string(content["text"])
                 }
@@ -118,13 +128,14 @@ func HandleMail(broker string,
                     gomailer.WithHTML(htmlContent),gomailer.WithText(textContent),
                     gomailer.WithSubject(user.Subject))
 
-                SendEmailWithRetry(logger,mailService,mail,producer,msg.NotificationId,notificationRepo,provider);
+                SendEmailWithRetry(emailCtx,logger,mailService,mail,producer,msg.NotificationId,notificationRepo,provider,tracer);
             }()
 		}
 	}
 }
 
 func SendEmailWithRetry(
+    ctx context.Context,
     logger *zap.Logger,
     mailService gomailer.Mailer,
     mail gomailer.Email,
@@ -132,10 +143,12 @@ func SendEmailWithRetry(
     notificationID uuid.UUID,
     notificationRepo *repositories.NotificationRepository,
     provider string,
-
+    tracer trace.Tracer,
 ) error {
     timer := prometheus.NewTimer(metrics.NotificationSendDuration.WithLabelValues(provider, "email_worker"))
     defer timer.ObserveDuration()
+    _, sendSpan := tracer.Start(ctx, "send-email")
+	defer sendSpan.End()
     for attempt := 1; attempt <= maxRetries; attempt++ {
         start := time.Now()
         apiTimer := prometheus.NewTimer(metrics.ExternalAPIDuration.WithLabelValues(provider, "email"))
@@ -156,10 +169,11 @@ func SendEmailWithRetry(
                 LatencyMs:      latency,
             })
             metrics.ExternalAPISuccessTotal.WithLabelValues(provider, "email_worker").Inc()
-            metrics.NotificationsAttemptedTotal.WithLabelValues("email", "success", provider).Inc()
 
             return nil
         }
+        sendSpan.AddEvent(fmt.Sprintf("Retry %d failed", attempt))
+		sendSpan.RecordError(err)
         metrics.NotificationsAttemptedTotal.WithLabelValues("email", "failed", provider).Inc()
 
         backoffDelay := time.Second * time.Duration(1<<(attempt-1))
@@ -198,18 +212,26 @@ func SendEmailWithRetry(
         )
         return mErr
     }
+     _, dlqSpan := tracer.Start(ctx, "publish-dlq")
+	defer dlqSpan.End()
     logger.Error("Permanent email failure - sending to DLQ",
         zap.String("to", strings.Join(mail.To, ",")),
         zap.String("subject", mail.Subject),
     )
 
    err:= producer.Publish(context.Background(), "notification.email.dlq", notificationID[:], mailBytes)
-    if err!=nil {
-           logger.Error("couldnt send to DLQ",
-        zap.String("to", strings.Join(mail.To, ",")),
-        zap.String("subject", mail.Subject),
-    )
+
+    if err != nil {
+        logger.Error("couldnt send to DLQ",
+            zap.String("to", strings.Join(mail.To, ",")),
+            zap.String("subject", mail.Subject),
+        )
+        dlqSpan.RecordError(err)
+        dlqSpan.SetStatus(codes.Error, err.Error())
+    } else {
+        dlqSpan.SetStatus(codes.Ok, "dlq published")
     }
+
 	metrics.NotificationDLQTotal.WithLabelValues("provider_error","email")
     notificationRepo.CreateAttempt(&models.DeliveryAttempt{
         NotificationID: notificationID,

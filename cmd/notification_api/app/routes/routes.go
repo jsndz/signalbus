@@ -6,18 +6,19 @@ import (
 	"github.com/jsndz/signalbus/middlewares"
 	"github.com/jsndz/signalbus/pkg/kafka"
 	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
-func Notifications(router *gin.RouterGroup,p *kafka.Producer,tdb *gorm.DB,ndb *gorm.DB,redisClient *redis.Client,log *zap.Logger, ){
+func Notifications(router *gin.RouterGroup,p *kafka.Producer,tdb *gorm.DB,ndb *gorm.DB,redisClient *redis.Client,log *zap.Logger, tracer trace.Tracer){
 	notificationHandler :=handler.NewNotificationHandler(ndb)
 	notifyMiddleware := middlewares.MiddlewareConfig{
 		RedisClient:redisClient,
 		DB: tdb,
 	}
 	
-	router.POST("/",middlewares.NotificationMiddleware(&notifyMiddleware),notificationHandler.Notify(p,tdb,ndb,log))
+	router.POST("/",middlewares.NotificationMiddleware(&notifyMiddleware),notificationHandler.Notify(p,tdb,ndb,log,tracer))
 	router.POST("/publish",middlewares.NotificationMiddleware(&notifyMiddleware),notificationHandler.Publish(p,tdb,ndb,log))
 	router.GET("/:id",notificationHandler.GetNotification(log))
 	router.POST("/:id/redrive",notificationHandler.RedriveNotification(log,p))

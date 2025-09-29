@@ -14,6 +14,10 @@ import (
 	"github.com/jsndz/signalbus/pkg/kafka"
 	"github.com/jsndz/signalbus/pkg/models"
 	"github.com/jsndz/signalbus/pkg/types"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -28,10 +32,11 @@ func NewNotificationHandler(db *gorm.DB) *NotificationHandler {
 
 
 
-func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB,ndb *gorm.DB, log *zap.Logger) gin.HandlerFunc {
+func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB,ndb *gorm.DB, log *zap.Logger, tracer trace.Tracer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		s := services.NewTenantService(tdb)
-	
+		tracer_context, span := tracer.Start(c.Request.Context(), "handle-sending")
+		defer span.End()
 		idem_key := c.GetHeader("X-Idempotency-Key")
 		tenant_id ,exists:= c.Get("tenant_id")
 		if !exists{
@@ -115,6 +120,7 @@ func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB,ndb *gorm.D
 			for _, channel := range policy.Channels {
 				topic := "notification." + channel
 				for _, pl := range payloads {
+					_, dbSpan := tracer.Start(tracer_context, "create-notification")
 					if channel == "sms"{
 						num ,ok :=pl.RecieverData["to"].(string)
 						if !ok || num == "" {
@@ -129,12 +135,17 @@ func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB,ndb *gorm.D
 						pl.RecieverData["to"] = to
 					}
 					notification_id,err:= h.service.CreateNotification(tenant.ID,req.EventType,req.UserRef)	
+
 					if err != nil {
+						dbSpan.RecordError(err)
+						dbSpan.SetStatus(codes.Error, err.Error())
 						log.Error("failed to create notification", zap.Error(err))
 						c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create notification"})
 						return
 					}
-				
+					dbSpan.SetStatus(codes.Ok, "notification created")
+
+					defer dbSpan.End()
 
 					msg := types.KafkaStreamData{
 						IdempotencyKey: idem_key,
@@ -155,13 +166,19 @@ func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB,ndb *gorm.D
 					}
 					ctx := c.Request.Context()
 					key := []byte(tenant.ID.String())
+					headers := make(map[string]string)
+					otel.GetTextMapPropagator().Inject(tracer_context, propagation.MapCarrier(headers))
+					_, kafkaSpan := tracer.Start(tracer_context, "publish-kafka")
 					if err := p.Publish(ctx, topic, key, msgBytes); err != nil {
+						kafkaSpan.RecordError(err)
+						kafkaSpan.SetStatus(codes.Error, err.Error())
 						log.Error("failed to publish message", zap.String("topic", topic), zap.Error(err))
 					} else {
 						log.Debug("published message", zap.String("topic", topic), zap.String("tenant", tenant.ID.String()))
-						
-					}
+						kafkaSpan.SetStatus(codes.Ok, "published")
 
+					}
+					defer kafkaSpan.End()
 				}
 			}
 		}
@@ -169,6 +186,7 @@ func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB,ndb *gorm.D
 		if !matched {
 			log.Warn("no policy matched event", zap.String("event_type", req.EventType), zap.String("tenant", tenant.ID.String()))
 			c.JSON(http.StatusBadRequest, gin.H{"error": "no policy matches event type"})
+			span.SetStatus(codes.Error, "no policy matched event")
 			return
 		}
 
