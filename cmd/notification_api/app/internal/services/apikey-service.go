@@ -9,7 +9,6 @@ import (
 	"gorm.io/gorm"
 )
 
-
 type APIKeyService struct {
 	repo *repositories.APIKeyRepository
 }
@@ -48,5 +47,3 @@ func (s *APIKeyService) ListAPIKeys(tenantID uuid.UUID) ([]models.APIKey, error)
 func (s *APIKeyService) DeleteAPIKey(id uuid.UUID) error {
 	return s.repo.Delete(id)
 }
-
-

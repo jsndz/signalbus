@@ -8,8 +8,6 @@ import "github.com/jsndz/signalbus/pkg/types"
 // this can do abstractions like m= &SMTPMailer{}
 // m.send() this gives abstraction
 
-
-
 type Mailer interface {
 	Send (Email) (*types.SendResponse,error)
 }

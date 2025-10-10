@@ -11,21 +11,21 @@ import (
 	"gorm.io/gorm"
 )
 
-func Notifications(router *gin.RouterGroup,p *kafka.Producer,tdb *gorm.DB,ndb *gorm.DB,redisClient *redis.Client,log *zap.Logger, tracer trace.Tracer){
-	notificationHandler :=handler.NewNotificationHandler(ndb)
+func Notifications(router *gin.RouterGroup, p *kafka.Producer, tdb *gorm.DB, ndb *gorm.DB, redisClient *redis.Client, log *zap.Logger, tracer trace.Tracer) {
+	notificationHandler := handler.NewNotificationHandler(ndb)
 	notifyMiddleware := middlewares.MiddlewareConfig{
-		RedisClient:redisClient,
-		DB: tdb,
+		RedisClient: redisClient,
+		DB:          tdb,
 	}
-	
-	router.POST("/",middlewares.NotificationMiddleware(&notifyMiddleware),notificationHandler.Notify(p,tdb,ndb,log,tracer))
-	router.POST("/publish",middlewares.NotificationMiddleware(&notifyMiddleware),notificationHandler.Publish(p,tdb,ndb,log))
-	router.GET("/:id",notificationHandler.GetNotification(log))
-	router.POST("/:id/redrive",notificationHandler.RedriveNotification(log,p))
+
+	router.POST("/", middlewares.NotificationMiddleware(&notifyMiddleware), notificationHandler.Notify(p, tdb, ndb, log, tracer))
+	router.POST("/publish", middlewares.NotificationMiddleware(&notifyMiddleware), notificationHandler.Publish(p, tdb, ndb, log))
+	router.GET("/:id", notificationHandler.GetNotification(log))
+	router.POST("/:id/redrive", notificationHandler.RedriveNotification(log, p))
 }
 
-func Tenants(r *gin.RouterGroup,db *gorm.DB,log *zap.Logger ){
-	tenantHandler :=handler.NewTenantHandler(db)
+func Tenants(r *gin.RouterGroup, db *gorm.DB, log *zap.Logger) {
+	tenantHandler := handler.NewTenantHandler(db)
 	r.POST("/", tenantHandler.CreateTenant)
 	r.GET("/", tenantHandler.ListTenants)
 	r.GET("/:id", tenantHandler.GetTenant)
@@ -33,8 +33,8 @@ func Tenants(r *gin.RouterGroup,db *gorm.DB,log *zap.Logger ){
 	r.POST("/policies", tenantHandler.CreatePolicy)
 }
 
-func Templates(r *gin.RouterGroup,db *gorm.DB,log *zap.Logger ){
-	templateHandler :=handler.NewTemplateHandler(db)
+func Templates(r *gin.RouterGroup, db *gorm.DB, log *zap.Logger) {
+	templateHandler := handler.NewTemplateHandler(db)
 	r.POST("/", templateHandler.CreateTemplate)
 	r.GET("/:id", templateHandler.GetTemplateByID)
 	r.GET("/", templateHandler.ListTemplates)
@@ -49,7 +49,6 @@ func APIKeys(r *gin.RouterGroup, db *gorm.DB, log *zap.Logger) {
 	r.GET("/", apiKeyHandler.ListAPIKeys)
 	r.DELETE("/:id", apiKeyHandler.DeleteAPIKey)
 }
-
 
 func Policies(r *gin.RouterGroup, db *gorm.DB, log *zap.Logger) {
 	policyHandler := handler.NewPolicyHandler(db)

@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	httpSwagger "github.com/swaggo/http-swagger"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 
@@ -34,31 +35,31 @@ func main() {
 		panic("Failed to initialize zap logger: " + err.Error())
 	}
 
-	cleanup := tracing.InitTracer("notification_api",log)
+	cleanup := tracing.InitTracer("notification_api", log)
 	defer cleanup()
 	tracer := otel.Tracer("notification_api")
 	broker := utils.GetEnv("KAFKA_BROKER")
 	notification_dns := os.Getenv("NOTIFICATION_DB")
-	notification_db,err := database.InitDB(notification_dns)
+	notification_db, err := database.InitDB(notification_dns)
 	if err != nil {
 		panic("DB not init  " + err.Error())
 	}
 	tenant_dns := os.Getenv("TENANT_DB")
-	tenant_db,err := database.InitDB(tenant_dns)
+	tenant_db, err := database.InitDB(tenant_dns)
 	if err != nil {
 		panic("DB not init" + err.Error())
 	}
 	redis_dns := utils.GetEnv("REDIS_CLIENT")
 	redis := database.InitRedis(redis_dns)
 	template_dns := os.Getenv("TEMPLATE_DB")
-	template_db,err := database.InitDB(template_dns)
+	template_db, err := database.InitDB(template_dns)
 	database.MigrateDB(template_db, &models.Template{})
-	database.MigrateDB(notification_db, &models.Notification{},&models.DeliveryAttempt{})
-	database.MigrateDB(tenant_db, &models.Tenant{},&models.Policy{},&models.APIKey{},&models.IdempotencyKey{})
+	database.MigrateDB(notification_db, &models.Notification{}, &models.DeliveryAttempt{})
+	database.MigrateDB(tenant_db, &models.Tenant{}, &models.Policy{}, &models.APIKey{}, &models.IdempotencyKey{})
 	if err != nil {
 		panic("DB not init  " + err.Error())
 	}
-	
+
 	log.Info("Logger initialized")
 	metrics.InitKafkaMetrics()
 
@@ -74,14 +75,20 @@ func main() {
 	})
 
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	router.StaticFile("/openapi.yaml", "./openapi.yaml")
+
+	router.GET("/docs/*any", gin.WrapH(httpSwagger.Handler(
+		httpSwagger.URL("http://localhost:3000/openapi.yaml"),
+	)))
+
 
 	v1 := router.Group("/api")
-	routes.Notifications(v1.Group("/notify"), producer,tenant_db,notification_db, redis,log,tracer)
-	routes.Tenants(v1.Group("/tenants"),tenant_db,log)
-	routes.APIKeys(v1.Group("/keys"),tenant_db,log)
-	routes.Policies(v1.Group("/policies"),tenant_db,log)
+	routes.Notifications(v1.Group("/notify"), producer, tenant_db, notification_db, redis, log, tracer)
+	routes.Tenants(v1.Group("/tenants"), tenant_db, log)
+	routes.APIKeys(v1.Group("/keys"), tenant_db, log)
+	routes.Policies(v1.Group("/policies"), tenant_db, log)
 
-	routes.Templates(v1.Group("/templates"),template_db,log)
+	routes.Templates(v1.Group("/templates"), template_db, log)
 	go handleShutdown(producer, log)
 	if err := router.Run(":3000"); err != nil {
 		log.Fatal("Failed to start server", zap.Error(err))
@@ -100,6 +107,6 @@ func handleShutdown(producer *kafka.Producer, log *zap.Logger) {
 	} else {
 		log.Info("Kafka producer closed cleanly")
 	}
-	
+
 	os.Exit(0)
 }

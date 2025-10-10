@@ -9,7 +9,6 @@ import (
 	"gorm.io/gorm"
 )
 
-
 type APIKeyHandler struct {
 	service *services.APIKeyService
 }

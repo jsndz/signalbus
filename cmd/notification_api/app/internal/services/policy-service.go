@@ -8,6 +8,7 @@ import (
 	"github.com/jsndz/signalbus/pkg/repositories"
 	"gorm.io/gorm"
 )
+
 type PolicyService struct {
 	repo *repositories.PolicyRepository
 }

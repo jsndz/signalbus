@@ -12,6 +12,6 @@ RUN go build -o /api_server ./cmd/notification_api
 FROM alpine:latest
 
 COPY --from=builder /api_server /api_server
-
+COPY --from=builder /app/openapi.yaml /openapi.yaml
 EXPOSE 3000
 CMD ["/api_server"]

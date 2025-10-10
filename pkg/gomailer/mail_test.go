@@ -99,5 +99,4 @@ func TestSendMail(t *testing.T)  {
 	} else {
 		fmt.Println(" got Email successful")
 	}
-
 }

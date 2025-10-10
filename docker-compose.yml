@@ -12,10 +12,11 @@ services:
     ports:
       - "9092:9092"
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_BROKER_ID: 1
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
 
   prometheus:
     image: prom/prometheus:latest
@@ -59,7 +60,8 @@ services:
     depends_on:
       - kafka
     volumes:
-    - ./config.yaml:/config.yaml
+      - ./config.yaml:/config.yaml
+      - ./openapi.yaml:/openapi.yaml
   email:
     build:
       context: .
@@ -74,7 +76,7 @@ services:
       - kafka
       - mailpit
     volumes:
-    - ./config.yaml:/config.yaml
+      - ./config.yaml:/config.yaml
   sms:
     build:
       context: .
@@ -88,7 +90,7 @@ services:
     depends_on:
       - kafka
     volumes:
-    - ./config.yaml:/config.yaml
+      - ./config.yaml:/config.yaml
 
   tenant-db:
     image: postgres:15
@@ -143,17 +145,15 @@ services:
     volumes:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
     ports:
-      - "4317:4317"   
+      - "4317:4317"
       - "55681:55681"
   tempo:
-    image: grafana/tempo:2.9.0
+    image: grafana/tempo:2.8.1
     container_name: tempo
     ports:
       - "3200:3200"
     command: -config.file=/etc/tempo/config.yaml
 
-
- 
 volumes:
   grafana-storage:
   tenant-data:

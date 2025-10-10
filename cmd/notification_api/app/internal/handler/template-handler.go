@@ -105,4 +105,3 @@ func (h *TemplateHandler) DeleteTemplate(c *gin.Context) {
 
 	c.JSON(http.StatusNoContent, nil)
 }
-

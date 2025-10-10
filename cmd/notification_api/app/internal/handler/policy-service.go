@@ -8,6 +8,7 @@ import (
 	"github.com/jsndz/signalbus/cmd/notification_api/app/internal/services"
 	"gorm.io/gorm"
 )
+
 type PolicyHandler struct {
 	service *services.PolicyService
 }

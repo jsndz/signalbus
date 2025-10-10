@@ -467,7 +467,7 @@ Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship af
 ### Phase 6 — Observability
 
 - [x] Standardize metrics names/labels.
-- [ ] OTel tracing across services.
+- [x] OTel tracing across services.
 - [x] Grafana dashboards for API, channels, Kafka lag, providers.
 - [ ] Alerting rules for failure rates & lag.
 

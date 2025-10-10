@@ -1,0 +1,1168 @@
+openapi: 3.0.3
+info:
+  title: Signalbus Notification API
+  description: |
+    A multi-tenant notification service that supports email, SMS, and other channels.
+    Provides template management, tenant management, API key management, and policy-based routing.
+  version: 1.0.0
+  contact:
+    name: Signalbus Team
+servers:
+  - url: http://localhost:3000
+    description: Development server
+  - url: https://api.signalbus.com
+    description: Production server
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Returns the health status of the API
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "ok"
+
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      description: Returns Prometheus metrics for monitoring
+      tags:
+        - Monitoring
+      responses:
+        '200':
+          description: Metrics data
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /api/notify:
+    post:
+      summary: Send notification
+      description: |
+        Send a notification using template-based routing. The system will match the event_type
+        against tenant policies and route to appropriate channels (email, sms, etc.).
+        Supports idempotency via X-Idempotency-Key header.
+      tags:
+        - Notifications
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: X-Idempotency-Key
+          in: header
+          description: Idempotency key for request deduplication
+          required: true
+          schema:
+            type: string
+            maxLength: 64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotifyRequest'
+            examples:
+              email_notification:
+                summary: Email notification example
+                value:
+                  event_type: "user_welcome"
+                  user_ref: "user_123"
+                  data:
+                    recipients:
+                      - email: "user@example.com"
+                        name: "John Doe"
+                  template_data:
+                    locale: "en-US"
+              sms_notification:
+                summary: SMS notification example
+                value:
+                  event_type: "order_confirmation"
+                  user_ref: "user_456"
+                  data:
+                    recipients:
+                      - to: "+1234567890"
+                        name: "Jane Smith"
+                  template_data:
+                    locale: "en-US"
+      responses:
+        '202':
+          description: Notification accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/notify/publish:
+    post:
+      summary: Publish notification directly
+      description: |
+        Publish a notification directly to a specific channel without template processing.
+        Useful for sending custom messages or when templates are not needed.
+      tags:
+        - Notifications
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: X-Idempotency-Key
+          in: header
+          description: Idempotency key for request deduplication
+          required: true
+          schema:
+            type: string
+            maxLength: 64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishRequest'
+            examples:
+              direct_email:
+                summary: Direct email example
+                value:
+                  event_type: "custom_message"
+                  channel: "email"
+                  user_ref: "user_123"
+                  data:
+                    recipients:
+                      - email: "user@example.com"
+                        name: "John Doe"
+                  text_message: "Hello, this is a custom message!"
+                  html_message: "<h1>Hello!</h1><p>This is a custom message!</p>"
+      responses:
+        '202':
+          description: Notification published
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/notify/{id}:
+    get:
+      summary: Get notification details
+      description: Retrieve details of a specific notification by ID
+      tags:
+        - Notifications
+      parameters:
+        - name: id
+          in: path
+          description: Notification ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Notification details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+        '400':
+          description: Invalid notification ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/notify/{id}/redrive:
+    post:
+      summary: Redrive failed notification
+      description: Retry a failed notification from the dead letter queue
+      tags:
+        - Notifications
+      parameters:
+        - name: id
+          in: path
+          description: Notification ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Redrive completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "redrive complete"
+        '400':
+          description: Invalid notification ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No failed delivery attempts found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/tenants:
+    post:
+      summary: Create tenant
+      description: Create a new tenant
+      tags:
+        - Tenants
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  maxLength: 100
+                  description: Tenant name
+                  example: "Acme Corp"
+      responses:
+        '201':
+          description: Tenant created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: List tenants
+      description: Get all tenants
+      tags:
+        - Tenants
+      responses:
+        '200':
+          description: List of tenants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Tenant'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/tenants/{id}:
+    get:
+      summary: Get tenant
+      description: Get tenant by ID
+      tags:
+        - Tenants
+      parameters:
+        - name: id
+          in: path
+          description: Tenant ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Tenant details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '400':
+          description: Invalid UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Tenant not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete tenant
+      description: Delete a tenant
+      tags:
+        - Tenants
+      parameters:
+        - name: id
+          in: path
+          description: Tenant ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Tenant deleted
+        '400':
+          description: Invalid UUID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/tenants/policies:
+    post:
+      summary: Create policy for tenant
+      description: Create a notification policy for a tenant
+      tags:
+        - Tenants
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tenant_id
+                - topic
+                - channels
+              properties:
+                tenant_id:
+                  type: string
+                  format: uuid
+                  description: Tenant ID
+                topic:
+                  type: string
+                  maxLength: 100
+                  description: Event topic/type
+                  example: "user_welcome"
+                channels:
+                  type: array
+                  items:
+                    type: string
+                    enum: [email, sms]
+                  description: Notification channels
+                  example: ["email", "sms"]
+      responses:
+        '201':
+          description: Policy created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/keys:
+    post:
+      summary: Create API key
+      description: Create a new API key for a tenant
+      tags:
+        - API Keys
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tenant_id
+                - hash
+              properties:
+                tenant_id:
+                  type: string
+                  format: uuid
+                  description: Tenant ID
+                hash:
+                  type: string
+                  description: Hashed API key
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                  description: API key scopes
+                  example: ["notify", "publish"]
+      responses:
+        '201':
+          description: API key created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIKey'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: List API keys
+      description: List API keys for a tenant
+      tags:
+        - API Keys
+      parameters:
+        - name: tenant_id
+          in: query
+          description: Tenant ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of API keys
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/APIKey'
+        '400':
+          description: Invalid tenant ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/keys/{id}:
+    delete:
+      summary: Delete API key
+      description: Delete an API key
+      tags:
+        - API Keys
+      parameters:
+        - name: id
+          in: path
+          description: API key ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: API key deleted
+        '400':
+          description: Invalid API key ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/policies:
+    post:
+      summary: Create policy
+      description: Create a notification policy
+      tags:
+        - Policies
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tenant_id
+                - topic
+                - channels
+                - locale
+              properties:
+                tenant_id:
+                  type: string
+                  format: uuid
+                  description: Tenant ID
+                topic:
+                  type: string
+                  maxLength: 100
+                  description: Event topic/type
+                  example: "user_welcome"
+                channels:
+                  type: array
+                  items:
+                    type: string
+                    enum: [email, sms]
+                  description: Notification channels
+                  example: ["email", "sms"]
+                locale:
+                  type: string
+                  maxLength: 100
+                  description: Locale for templates
+                  example: "en-US"
+      responses:
+        '201':
+          description: Policy created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: List policies
+      description: List policies for a tenant
+      tags:
+        - Policies
+      parameters:
+        - name: tenant_id
+          in: query
+          description: Tenant ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of policies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Policy'
+        '400':
+          description: Invalid tenant ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/policies/{id}:
+    delete:
+      summary: Delete policy
+      description: Delete a policy
+      tags:
+        - Policies
+      parameters:
+        - name: id
+          in: path
+          description: Policy ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Policy deleted
+        '400':
+          description: Invalid policy ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/templates:
+    post:
+      summary: Create template
+      description: Create a new notification template
+      tags:
+        - Templates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TemplateRequest'
+            examples:
+              email_template:
+                summary: Email template example
+                value:
+                  tenant_id: "123e4567-e89b-12d3-a456-426614174000"
+                  name: "welcome_email"
+                  channel: "email"
+                  content_type: "html"
+                  locale: "en-US"
+                  content: |
+                    <h1>Welcome {{.name}}!</h1>
+                    <p>Thank you for joining us.</p>
+              sms_template:
+                summary: SMS template example
+                value:
+                  tenant_id: "123e4567-e89b-12d3-a456-426614174000"
+                  name: "order_confirmation"
+                  channel: "sms"
+                  content_type: "text"
+                  locale: "en-US"
+                  content: "Order {{.order_id}} confirmed. Total: ${{.total}}"
+      responses:
+        '201':
+          description: Template created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Template'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: List templates
+      description: List templates for a tenant
+      tags:
+        - Templates
+      parameters:
+        - name: tenant_id
+          in: query
+          description: Tenant ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Template'
+        '400':
+          description: Invalid tenant ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/templates/{id}:
+    get:
+      summary: Get template
+      description: Get template by ID
+      tags:
+        - Templates
+      parameters:
+        - name: id
+          in: path
+          description: Template ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Template details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Template'
+        '400':
+          description: Invalid template ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Update template
+      description: Update a template
+      tags:
+        - Templates
+      parameters:
+        - name: id
+          in: path
+          description: Template ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TemplateRequest'
+      responses:
+        '200':
+          description: Template updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Template'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete template
+      description: Delete a template
+      tags:
+        - Templates
+      parameters:
+        - name: id
+          in: path
+          description: Template ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Template deleted
+        '400':
+          description: Invalid template ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+
+  schemas:
+    NotifyRequest:
+      type: object
+      required:
+        - event_type
+        - user_ref
+        - data
+      properties:
+        event_type:
+          type: string
+          description: Event type that will be matched against policies
+          example: "user_welcome"
+        user_ref:
+          type: string
+          description: User reference identifier
+          example: "user_123"
+        data:
+          type: object
+          description: |
+            User data containing recipient information. Supports multiple formats:
+            - recipients: array of recipient objects
+            - receivers: array of recipient objects  
+            - users: array of recipient objects
+            - to: single recipient object or array
+            - targets: array of recipient objects
+          example:
+            recipients:
+              - email: "user@example.com"
+                name: "John Doe"
+        template_data:
+          type: object
+          description: Additional template data
+          properties:
+            locale:
+              type: string
+              description: Locale for template rendering
+              example: "en-US"
+          additionalProperties: true
+
+    PublishRequest:
+      type: object
+      required:
+        - event_type
+        - channel
+        - user_ref
+        - data
+      properties:
+        event_type:
+          type: string
+          description: Event type
+          example: "custom_message"
+        channel:
+          type: string
+          enum: [email, sms]
+          description: Target channel
+          example: "email"
+        user_ref:
+          type: string
+          description: User reference identifier
+          example: "user_123"
+        data:
+          type: object
+          description: User data containing recipient information
+          example:
+            recipients:
+              - email: "user@example.com"
+                name: "John Doe"
+        text_message:
+          type: string
+          description: Plain text message content
+          example: "Hello, this is a custom message!"
+        html_message:
+          type: string
+          description: HTML message content
+          example: "<h1>Hello!</h1><p>This is a custom message!</p>"
+
+    NotificationResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Notification accepted"
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Notification ID
+        tenant_id:
+          type: string
+          format: uuid
+          description: Tenant ID
+        topic:
+          type: string
+          description: Event topic
+        user_ref:
+          type: string
+          description: User reference
+        status:
+          type: string
+          enum: [pending, delivered, failed]
+          description: Notification status
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Tenant ID
+        name:
+          type: string
+          description: Tenant name
+        quota_daily:
+          type: integer
+          description: Daily quota limit
+          default: 1000
+        quota_monthly:
+          type: integer
+          description: Monthly quota limit
+          default: 30000
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+        api_keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/APIKey'
+        policies:
+          type: array
+          items:
+            $ref: '#/components/schemas/Policy'
+
+    APIKey:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: API key ID
+        tenant_id:
+          type: string
+          format: uuid
+          description: Tenant ID
+        hash:
+          type: string
+          description: Hashed API key
+        scopes:
+          type: array
+          items:
+            type: string
+          description: API key scopes
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+
+    Policy:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Policy ID
+        tenant_id:
+          type: string
+          format: uuid
+          description: Tenant ID
+        topic:
+          type: string
+          description: Event topic/type
+        channels:
+          type: array
+          items:
+            type: string
+            enum: [email, sms]
+          description: Notification channels
+        locale:
+          type: string
+          description: Locale for templates
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+
+    Template:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Template ID
+        tenant_id:
+          type: string
+          format: uuid
+          description: Tenant ID
+        name:
+          type: string
+          description: Template name
+        channel:
+          type: string
+          enum: [email, sms]
+          description: Notification channel
+        content_type:
+          type: string
+          enum: [text, html]
+          description: Content type
+        locale:
+          type: string
+          description: Locale
+          default: "en-US"
+        content:
+          type: string
+          description: Template content
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+
+    TemplateRequest:
+      type: object
+      required:
+        - tenant_id
+        - name
+        - channel
+        - content_type
+        - content
+      properties:
+        tenant_id:
+          type: string
+          format: uuid
+          description: Tenant ID
+        name:
+          type: string
+          maxLength: 100
+          description: Template name
+        channel:
+          type: string
+          enum: [email, sms]
+          description: Notification channel
+        content_type:
+          type: string
+          enum: [text, html]
+          description: Content type
+        locale:
+          type: string
+          maxLength: 10
+          description: Locale
+          default: "en-US"
+        content:
+          type: string
+          description: Template content
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+      example:
+        error: "Invalid request parameters"
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Monitoring
+    description: Monitoring and metrics endpoints
+  - name: Notifications
+    description: Notification sending and management
+  - name: Tenants
+    description: Tenant management
+  - name: API Keys
+    description: API key management
+  - name: Policies
+    description: Notification policy management
+  - name: Templates
+    description: Template management

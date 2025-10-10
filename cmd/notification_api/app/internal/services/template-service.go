@@ -12,6 +12,7 @@ import (
 type TemplateService struct {
 	repo *repositories.TemplateRepository
 }
+
 func NewTemplateService(db *gorm.DB) *TemplateService {
 	return &TemplateService{repo: repositories.NewTemplateRepository(db)}
 }
