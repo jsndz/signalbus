@@ -70,12 +70,27 @@ func (r *NotificationRepository) DeleteAttempt(id uuid.UUID) error {
 	return r.db.Delete(&models.DeliveryAttempt{}, "id = ?", id).Error
 }
 
-func (r *NotificationRepository) GetDLQByNotificationID(id uuid.UUID) (*models.DeliveryAttempt, error) {
-    var attempt models.DeliveryAttempt
-    if err := r.db.
-        Where("notification_id = ? AND status = ?", id, "dlq").
-        First(&attempt).Error; err != nil {
-        return nil, err
+func (r *NotificationRepository) GetDLQByNotificationID(id uuid.UUID) (*models.DeliveryAttempt, uuid.UUID, error) {
+    var out struct {
+        TenantID uuid.UUID
+        Message  []byte
+        Channel  string
     }
-    return &attempt, nil
+
+    if err := r.db.Table("delivery_attempts AS da").
+        Joins("JOIN notifications n ON n.id = da.notification_id").
+        Select("n.tenant_id, da.message, da.channel, da.id, da.notification_id, da.provider, da.status, da.error, da.try, da.latency_ms, da.created_at").
+        Where("da.notification_id = ? AND da.status = ?", id, "dlq").
+        Scan(&out).Error; err != nil {
+        return nil, uuid.Nil, err
+    }
+
+    attempt := &models.DeliveryAttempt{
+        NotificationID: id,
+        Channel:        out.Channel,
+        Status:         "dlq",
+        Message:        out.Message,
+    }
+
+    return attempt, out.TenantID, nil
 }

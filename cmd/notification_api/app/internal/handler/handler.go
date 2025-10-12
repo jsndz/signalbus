@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -100,6 +101,9 @@ func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB, ndb *gorm.
 		}
 
 		matched := false
+		if len(tenant.Policies) == 0 {
+			log.Warn("tenant has no notification policies configured", zap.String("tenant", tenant.ID.String()))
+		}
 
 		for _, policy := range tenant.Policies {
 			if policy.Topic != req.EventType {
@@ -131,7 +135,7 @@ func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB, ndb *gorm.
 						}
 						pl.RecieverData["to"] = to
 					}
-					notification_id, err := h.service.CreateNotification(tenant.ID, req.EventType, req.UserRef)
+					notification_id, err := h.service.CreateNotification(tenant.ID, req.EventType, channel, req.UserRef)
 
 					if err != nil {
 						dbSpan.RecordError(err)
@@ -142,7 +146,7 @@ func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB, ndb *gorm.
 					}
 					dbSpan.SetStatus(codes.Ok, "notification created")
 
-					defer dbSpan.End()
+					 
 
 					msg := types.KafkaStreamData{
 						IdempotencyKey: idem_key,
@@ -175,7 +179,8 @@ func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB, ndb *gorm.
 						kafkaSpan.SetStatus(codes.Ok, "published")
 
 					}
-					defer kafkaSpan.End()
+					dbSpan.End()
+					 kafkaSpan.End()
 				}
 			}
 		}
@@ -202,7 +207,133 @@ func (h *NotificationHandler) Notify(p *kafka.Producer, tdb *gorm.DB, ndb *gorm.
 		c.JSON(http.StatusAccepted, resp)
 	}
 }
-func (h *NotificationHandler) Publish(p *kafka.Producer, tdb *gorm.DB, ndb *gorm.DB, log *zap.Logger) gin.HandlerFunc {
+
+func PublishNotification(
+	ctx context.Context,
+	producer *kafka.Producer,
+	logger *zap.Logger,
+	tenantID uuid.UUID,
+	channel string,
+	idempotencyKey string,
+	msg types.KafkaStreamData,
+) error {
+	topic := fmt.Sprintf("notification.%s", channel)
+
+	msg.IdempotencyKey = idempotencyKey
+
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		logger.Error("failed to marshal Kafka message", zap.Error(err))
+		return fmt.Errorf("marshal kafka message: %w", err)
+	}
+
+	key := []byte(tenantID.String())
+
+	if err := producer.Publish(ctx, topic, key, msgBytes); err != nil {
+		logger.Error("failed to publish Kafka message",
+			zap.String("topic", topic),
+			zap.Error(err),
+		)
+		return fmt.Errorf("publish kafka message: %w", err)
+	}
+
+	logger.Info("Kafka message published successfully",
+		zap.String("topic", topic),
+		zap.String("tenant_id", tenantID.String()),
+		zap.String("notification_id", msg.NotificationId.String()),
+	)
+	return nil
+}
+func (h *NotificationHandler) Publish(
+	p *kafka.Producer,
+	tdb *gorm.DB,
+	ndb *gorm.DB,
+	log *zap.Logger,
+) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idemKey := c.GetHeader("X-Idempotency-Key")
+		tenantIDVal, exists := c.Get("tenant_id")
+		if !exists {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "missing tenant ID"})
+			return
+		}
+		tenantID, ok := tenantIDVal.(uuid.UUID)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tenant ID format"})
+			return
+		}
+
+		var record models.IdempotencyKey
+		if err := tdb.Where("key = ? AND tenant_id = ?", idemKey, tenantID).First(&record).Error; err == nil {
+			c.Data(record.StatusCode, "application/json", []byte(record.Response))
+			return
+		}
+
+		var req types.PublishRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON: " + err.Error()})
+			return
+		}
+
+		payloads, err := splitPayload(req.UserData, nil)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+			return
+		}
+
+		if req.Channel == "sms" {
+			for _, pl := range payloads {
+				if to, ok := pl.RecieverData["to"].(string); ok {
+					num, err := gosms.NormalizeSMS(to)
+					if err != nil {
+						c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+						return
+					}
+					pl.RecieverData["to"] = num
+				}
+			}
+		}
+
+		for _, pl := range payloads {
+			notificationID, err := h.service.CreateNotification(
+				tenantID, req.EventType, req.Channel, req.UserRef,
+			)
+			if err != nil {
+				log.Error("failed to create notification", zap.Error(err))
+				continue
+			}
+
+			msg := types.KafkaStreamData{
+				RecieverData:   pl.RecieverData,
+				TextMessage:    req.TextMessage,
+				HTMLMessage:    req.HTMLMessage,
+				NotificationId: notificationID,
+			}
+
+			if err := PublishNotification(c.Request.Context(), p, log, tenantID, req.Channel, idemKey, msg); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish notification"})
+				return
+			}
+		}
+
+		resp := gin.H{"message": "Notification published"}
+		respBytes, _ := json.Marshal(resp)
+
+		if err :=tdb.Create(&models.IdempotencyKey{
+			Key:         idemKey,
+			TenantID:    tenantID,
+			Response:    string(respBytes),
+			StatusCode:  http.StatusAccepted,
+		});
+		err != nil {
+			log.Error("failed to create idempotency record", zap.Error(err.Error))
+		}
+
+		c.JSON(http.StatusAccepted, resp)
+	}
+}
+
+func (h *NotificationHandler) Publish1(p *kafka.Producer, tdb *gorm.DB, ndb *gorm.DB, log *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idem_key := c.GetHeader("X-Idempotency-Key")
 		tenant_id, exists := c.Get("tenant_id")
@@ -274,7 +405,7 @@ func (h *NotificationHandler) Publish(p *kafka.Producer, tdb *gorm.DB, ndb *gorm
 		}
 
 		for _, pl := range payloads {
-			notification_id, err := h.service.CreateNotification(tenantID, req.EventType, req.UserRef)
+			notification_id, err := h.service.CreateNotification(tenantID, req.EventType,req.Channel, req.UserRef)
 			if err != nil {
 				log.Error("failed to create notification", zap.Error(err))
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create notification"})
@@ -358,45 +489,71 @@ func (h *NotificationHandler) RedriveNotification(log *zap.Logger, p *kafka.Prod
 			return
 		}
 
-		attempt, err := h.service.DLQNotification(id)
+		attempt, tenantId , err := h.service.DLQNotification(id)
 		if err != nil {
-			log.Error("failed to fetch delivery attempts",
+			log.Error("failed to fetch DLQ notification",
 				zap.String("notification_id", idStr),
 				zap.Error(err),
 			)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch delivery attempts"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch DLQ notification"})
 			return
 		}
 
 		if attempt.Status != "dlq" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "no failed delivery attempts found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "no DLQ delivery attempt found"})
 			return
 		}
 
-		ctx := context.Background()
 		if len(attempt.Message) == 0 {
-			log.Warn("skipping attempt with empty message",
+			log.Warn("skipping redrive due to empty message payload",
 				zap.String("attempt_id", attempt.ID.String()))
-
+			c.JSON(http.StatusBadRequest, gin.H{"error": "empty message payload in DLQ"})
+			return
 		}
 
-		topic := "notification." + attempt.Channel
-		key := attempt.NotificationID[:]
-
-		if err := p.Publish(ctx, topic, key, attempt.Message); err != nil {
-			log.Error("failed to republish DLQ message",
-				zap.String("topic", topic),
+		var msg types.KafkaStreamData
+		if err := json.Unmarshal(attempt.Message, &msg); err != nil {
+			log.Error("failed to unmarshal DLQ message",
 				zap.String("attempt_id", attempt.ID.String()),
 				zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid DLQ message format"})
+			return
 		}
 
-		log.Info("successfully redrived message",
-			zap.String("topic", topic),
-			zap.String("attempt_id", attempt.ID.String()))
+		msg.NotificationId = attempt.NotificationID
 
-		c.JSON(http.StatusOK, gin.H{"message": "redrive complete"})
+		err = PublishNotification(
+			c.Request.Context(),
+			p,
+			log,
+			tenantId,
+			attempt.Channel,
+			"", 
+			msg,
+		)
+		if err != nil {
+			log.Error("failed to redrive notification",
+				zap.String("attempt_id", attempt.ID.String()),
+				zap.String("channel", attempt.Channel),
+				zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to republish DLQ message"})
+			return
+		}
+
+		log.Info("successfully redrived DLQ message",
+			zap.String("attempt_id", attempt.ID.String()),
+			zap.String("notification_id", attempt.NotificationID.String()),
+			zap.String("channel", attempt.Channel))
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":          "redrive successful",
+			"notification_id":  attempt.NotificationID,
+			"channel":          attempt.Channel,
+			"previous_attempt": attempt.ID,
+		})
 	}
 }
+
 
 type normalizedPayload struct {
 	RecieverData   map[string]interface{}

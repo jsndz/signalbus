@@ -446,7 +446,7 @@ Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship af
 - [x] short term rate limit middleware.
 - [x] long term rate limit middleware.
 - [x] Idempotency keys (DB unique index + cache).
-- [ ] OpenAPI spec + Swagger UI.
+- [x] OpenAPI spec + Swagger UI.
 - [x] Idempotent Kafka producer keyed by user.
 
 ### Phase 4 — Persistence
@@ -454,11 +454,11 @@ Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship af
 - [x] Postgres schema for notifications, attempts, keys, templates.
 - [ ] Migrations with goose/golang-migrate.
 - [x] `GET /notifications/:id` and search with pagination.
-- [ ] `POST /notifications/:id/redrive`.
+- [x] `POST /notifications/:id/redrive`.
 
 ### Phase 5 — Templates & prefs
 
-- [x] Template storage; engines (Go tmpl )
+- [x] Template storage; engines (Go tmpl)
 - [ ] MJML pipeline.
 - [x] Localization field and selection.
 - [ ] Opt-out table and DND windows (tz aware).
