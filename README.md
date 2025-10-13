@@ -209,14 +209,4 @@ Pull requests are welcome! Open an issue first for feedback or discussion.
 
 ## todos[Phase 2.5]
 
-- [x] Idempotency for SMTP.
-- [x] DLQ
-- [] DLR webhook
-- [x] Persistance
-- [x] Redis
-- [] Publish
-- [] redrive
-- [x] Long term rate limiting
-- [] KafkaConsumerLag
-- [] KafkaRebalancesTotal
 - [] Attachments

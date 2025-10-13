@@ -21,6 +21,18 @@ func (c *Consumer) ReadFromKafka(ctx context.Context) (*kafka.Message, error) {
 		metrics.KafkaSubscriberFailureTotal.WithLabelValues(c.reader.Config().Topic).Inc()
 		return nil, err
 	}
+	go func() {
+		for {
+			if lag, err := c.reader.ReadLag(context.Background()); err == nil {
+				metrics.KafkaConsumerLag.WithLabelValues(
+					c.reader.Config().GroupID,
+					c.reader.Config().Topic,
+				).Set(float64(lag))
+			}
+			time.Sleep(10 * time.Second)
+		}
+	}()
+
 	return &m, nil
 }
 
@@ -29,6 +41,7 @@ func (c *Consumer) Close() error {
 }
 
 func NewConsumer(topic string, brokers []string, groupID string) *Consumer {
+	metrics.KafkaRebalancesTotal.WithLabelValues(groupID).Inc()
 	return &Consumer{
 		reader: kafka.NewReader(kafka.ReaderConfig{
 			Brokers: brokers,

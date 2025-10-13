@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jsndz/signalbus/metrics"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
@@ -14,6 +15,7 @@ import (
 type MiddlewareConfig struct {
 	RedisClient *redis.Client
 	DB          *gorm.DB
+
 }
 
 
@@ -34,6 +36,7 @@ func NotificationMiddleware(cfg *MiddlewareConfig) gin.HandlerFunc{
 			cfg.RedisClient.Expire(ctx, shortKey, time.Minute)
 		}
 		if count > 10 { 
+			metrics.HttpRateLimitRejectionsTotal.Add(1)
 			ctx.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "rate limit exceeded"})
 			return
 		}
@@ -50,6 +53,7 @@ func NotificationMiddleware(cfg *MiddlewareConfig) gin.HandlerFunc{
 			WHERE a.hash = ?
 		`, api_key).Scan(&keyRecord); 
 		if result.Error != nil {
+
 				ctx.JSON(http.StatusBadRequest, gin.H{
 						"error": fmt.Sprintf("invalid api-key: %v", result.Error),
 					})
@@ -72,6 +76,8 @@ func NotificationMiddleware(cfg *MiddlewareConfig) gin.HandlerFunc{
 			cfg.RedisClient.Expire(ctx, monthlyKey, 30*24*time.Hour)
 		}
 		if dailyCount > int64(keyRecord.QuotaDaily) || monthlyCount > int64(keyRecord.QuotaMonthly) {
+			metrics.HttpRateLimitRejectionsTotal.Add(1)
+
 			ctx.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "quota exceeded"})
 			return
 		}

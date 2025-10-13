@@ -91,7 +91,7 @@ var KafkaConsumerLag = prometheus.NewGaugeVec(
 		Name: "kafka_consumer_lag",
 		Help: "Lag of Kafka consumer group per topic/partition",
 	},
-	[]string{"group", "topic", "partition"},
+	[]string{"group", "topic",},
 )
 
 var KafkaRebalancesTotal = prometheus.NewCounterVec(

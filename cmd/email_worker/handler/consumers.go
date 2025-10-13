@@ -199,7 +199,6 @@ func SendEmailWithRetry(
         time.Sleep(waitTime)
     }
 
-    metrics.NotificationsAttemptedTotal.WithLabelValues("email", "failed",provider).Inc()
     metrics.ExternalAPIFailureTotal.WithLabelValues(provider, "email_worker").Inc()
     notificationRepo.UpdateStatus(notificationID, "failed")
 
