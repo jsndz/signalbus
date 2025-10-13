@@ -469,7 +469,7 @@ Each phase starts with **Learn**, then **Build** with concrete outcomes. Ship af
 - [x] Standardize metrics names/labels.
 - [x] OTel tracing across services.
 - [x] Grafana dashboards for API, channels, Kafka lag, providers.
-- [ ] Alerting rules for failure rates & lag.
+- [x] Alerting rules for failure rates & lag.
 
 ### Phase 7 — Multi-tenant
 

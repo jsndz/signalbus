@@ -1,0 +1,61 @@
+groups:
+  - name: signalbus_alerts
+    interval: 30s
+    rules:
+      - alert: HighNotificationFailureRate
+        expr: |
+          (
+            sum(rate(notifications_attempted_total{status="failed"}[5m]))
+            /
+            sum(rate(notifications_attempted_total[5m]))
+          ) > 0.2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High notification failure rate"
+          description: "More than 20% of notification attempts are failing in the last 5 minutes."
+
+      - alert: HighDLQRate
+        expr: |
+          sum(rate(notification_dlq_total[5m])) > 5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Too many DLQ events"
+          description: "More than 5 notifications/minute are being sent to DLQ."
+
+      - alert: HighExternalAPIFailureRate
+        expr: |
+          (
+            sum(rate(external_api_failure_total[5m]))
+            /
+            (sum(rate(external_api_success_total[5m])) + sum(rate(external_api_failure_total[5m])))
+          ) > 0.3
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "External API failures high"
+          description: "Over 30% of external API calls are failing."
+
+      - alert: HighKafkaLag
+        expr: |
+          max(kafka_consumer_lag) > 1000
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka consumer lag high"
+          description: "Kafka consumer lag exceeded 1000 messages."
+
+      - alert: HighKafkaPublishFailures
+        expr: |
+          sum(rate(kafka_publish_failure_total[5m])) > 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka publish failures"
+          description: "More than 1 Kafka publish failure per minute detected."
