@@ -4,6 +4,10 @@
 
 ---
 
+![](public/signalbus_architecture.png)
+
+---
+
 ![](public/1.png)
 ![](public/2.png)
 ![](public/3.png)
@@ -222,12 +226,14 @@ Pull requests are welcome! Open an issue first for feedback or discussion.
 **Current Phase**: Advanced production-ready features (Phases 6-7 complete)
 
 **Key Libraries Built**:
+
 - `pkg/gomailer` - Reusable email library with SMTP and Mailgun drivers
 - `pkg/gosms` - Reusable SMS library with Twilio driver and E.164 normalization
 - `pkg/kafka` - Kafka producer/consumer abstractions
 - `pkg/templates` - Template engine with localization support
 
 **Production Patterns Implemented**:
+
 - Idempotency keys for duplicate prevention
 - Exponential backoff retry with jitter
 - Dead Letter Queue (DLQ) for failed messages
