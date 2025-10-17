@@ -92,43 +92,17 @@ services:
     volumes:
       - ./config.yaml:/config.yaml
 
-  tenant-db:
+  postgres:
     image: postgres:15
-    container_name: tenant-db
+    container_name: signalbus
     ports:
       - "5432:5432"
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: signal_bus
-      POSTGRES_DB: tenant
+      POSTGRES_PASSWORD: signalbus
+      POSTGRES_DB: signalbus
     volumes:
-      - tenant-data:/var/lib/postgresql/data
-    restart: unless-stopped
-
-  template-db:
-    image: postgres:15
-    container_name: template-db
-    ports:
-      - "5433:5432"
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: signal_bus
-      POSTGRES_DB: template
-    volumes:
-      - template-data:/var/lib/postgresql/data
-    restart: unless-stopped
-
-  notification-db:
-    image: postgres:15
-    container_name: notification-db
-    ports:
-      - "5434:5432"
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: signal_bus
-      POSTGRES_DB: notification
-    volumes:
-      - notification-data:/var/lib/postgresql/data
+      - signalbus-data:/var/lib/postgresql/data
     restart: unless-stopped
 
   redis:
@@ -156,7 +130,5 @@ services:
 
 volumes:
   grafana-storage:
-  tenant-data:
-  template-data:
-  notification-data:
+  signalbus-data:
   redis-data:

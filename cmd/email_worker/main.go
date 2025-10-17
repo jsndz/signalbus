@@ -31,7 +31,7 @@ func main() {
 		panic("failed to initialize zap logger: " + err.Error())
 	}
 	defer logr.Sync()
-	template_dns := os.Getenv("TEMPLATE_DB")
+	template_dns := os.Getenv("SIGNALBUS_DB")
 	template_db,err := database.InitDB(template_dns)
 	if err != nil {
 		panic("failed to initialize Database: " + err.Error())
@@ -41,7 +41,7 @@ func main() {
 	defer cleanup()
 	tracer := otel.Tracer("notification_api")
 
-	notification_dns := os.Getenv("NOTIFICATION_DB")
+	notification_dns := os.Getenv("SIGNALBUS_DB")
 	notification_db,err := database.InitDB(notification_dns)
 	if err != nil {
 		panic("failed to initialize Database: " + err.Error())
@@ -100,6 +100,5 @@ func handleShutdown(producer *kafka.Producer, log *zap.Logger) {
 	} else {
 		log.Info("Kafka producer closed cleanly")
 	}
-
 	os.Exit(0)
 }

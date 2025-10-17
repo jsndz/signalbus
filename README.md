@@ -11,16 +11,19 @@
 
 ---
 
-## Features
+## Features (completed per todo)
 
-- Microservices built in Go
-- Email notifications via Mailgun
-- SMS notifications via Twilio
-- Kafka-based event distribution
-- Dockerized services with Docker Compose
-- Observability with Prometheus + Grafana
-- CI/CD and deployment on Railway
-- Fully testable via REST endpoints
+- `/publish/:topic` and `/notify` endpoints
+- Kafka producer keyed by user; workers for email and SMS
+- Email worker with retry + DLQ; Prometheus metrics and JSON logs
+- SMS worker with retry + DLQ + per-tenant rate limit; Prometheus metrics
+- Idempotency keys (DB unique index + cache)
+- API key authentication; short- and long-term rate limiting
+- PostgreSQL schema for notifications, attempts, keys, templates; search and redrive endpoints
+- Templates with Go templates and localization
+- Policy-driven fan-out honoring preferences
+- Observability: standardized metrics, Grafana dashboards, OpenTelemetry tracing, alerting rules
+- Multi-tenancy: tenant column propagation, scoped queries, quotas
 
 ---
 
@@ -61,14 +64,16 @@ Mailgun & Twilio
 
 ## Tech Stack
 
-- **Go**
-- **Kafka (segmentio/kafka-go)**
-- **Docker / Docker Compose**
-- **Mailgun API**
-- **Twilio API**
-- **PostgreSQL (optional for logging)**
-- **Prometheus + Grafana**
-- **Railway / GitHub Actions for CI/CD**
+- **Go** - Core microservices and libraries (`pkg/gomailer`, `pkg/gosms`)
+- **Kafka (segmentio/kafka-go)** - Event distribution with consumer groups
+- **Docker / Docker Compose** - Containerization and local orchestration
+- **Mailgun API + SMTP** - Email delivery with fallback support
+- **Twilio API** - SMS delivery with E.164 normalization
+- **PostgreSQL** - Persistence for notifications, attempts, templates, tenants
+- **Redis** - Caching and idempotency key storage
+- **Prometheus + Grafana** - Metrics collection and visualization
+- **OpenTelemetry** - Distributed tracing across services
+- **Railway + GitHub Actions** - Cloud deployment and CI/CD pipeline
 
 ---
 
@@ -188,16 +193,21 @@ Topics Learned:
 
 ---
 
-## Roadmap
+## Completed (from todo)
 
-- [x] Signup event handling
-- [x] Email/SMS delivery
-- [x] Prometheus + Grafana integration
-- [x] Cloud deployment
-- [ ] Add retry logic with Dead Letter Queues
-- [ ] In-app notifications (web dashboard)
-- [ ] Notification history with PostgreSQL
-- [ ] OpenTelemetry tracing
+- [x] `pkg/gomailer`: interface + SMTP + Mailgun drivers; timeouts/retries; unit tests
+- [x] Email worker: consumes `notifications.email`, retry + DLQ, metrics, JSON logs
+- [x] `pkg/gosms`: interface; Twilio/Vonage drivers; E.164 normalization
+- [x] SMS worker: retry + DLQ + per-tenant rate limit; metrics
+- [x] API: `/publish/:topic`, `/notify`; API key auth; short/long-term rate limits
+- [x] Idempotency keys (DB unique index + cache)
+- [x] OpenAPI spec + Swagger UI
+- [x] Kafka producer keyed by user (idempotent)
+- [x] Postgres: schemas for notifications, attempts, keys, templates
+- [x] Search + `GET /notifications/:id`; `POST /notifications/:id/redrive`
+- [x] Templates (Go tmpl) + localization; policy engine
+- [x] Observability: standardized metrics, Grafana dashboards, OTel tracing, alerting rules
+- [x] Multi-tenant: tenant column, scoped queries, per-tenant quotas
 
 ---
 
@@ -207,6 +217,21 @@ Pull requests are welcome! Open an issue first for feedback or discussion.
 
 ---
 
-## todos[Phase 2.5]
+## Implementation Status
 
-- [] Attachments
+**Current Phase**: Advanced production-ready features (Phases 6-7 complete)
+
+**Key Libraries Built**:
+- `pkg/gomailer` - Reusable email library with SMTP and Mailgun drivers
+- `pkg/gosms` - Reusable SMS library with Twilio driver and E.164 normalization
+- `pkg/kafka` - Kafka producer/consumer abstractions
+- `pkg/templates` - Template engine with localization support
+
+**Production Patterns Implemented**:
+- Idempotency keys for duplicate prevention
+- Exponential backoff retry with jitter
+- Dead Letter Queue (DLQ) for failed messages
+- Multi-tenant rate limiting and quotas
+- Comprehensive observability with metrics, tracing, and logging
+- API key authentication and authorization
+- Template-based content rendering

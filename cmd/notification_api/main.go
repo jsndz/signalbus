@@ -39,19 +39,19 @@ func main() {
 	defer cleanup()
 	tracer := otel.Tracer("notification_api")
 	broker := utils.GetEnv("KAFKA_BROKER")
-	notification_dns := os.Getenv("NOTIFICATION_DB")
+	notification_dns := os.Getenv("SIGNALBUS_DB")
 	notification_db, err := database.InitDB(notification_dns)
 	if err != nil {
 		panic("DB not init  " + err.Error())
 	}
-	tenant_dns := os.Getenv("TENANT_DB")
+	tenant_dns := os.Getenv("SIGNALBUS_DB")
 	tenant_db, err := database.InitDB(tenant_dns)
 	if err != nil {
 		panic("DB not init" + err.Error())
 	}
 	redis_dns := utils.GetEnv("REDIS_CLIENT")
 	redis := database.InitRedis(redis_dns)
-	template_dns := os.Getenv("TEMPLATE_DB")
+	template_dns := os.Getenv("SIGNALBUS_DB")
 	template_db, err := database.InitDB(template_dns)
 	database.MigrateDB(template_db, &models.Template{})
 	database.MigrateDB(notification_db, &models.Notification{}, &models.DeliveryAttempt{})

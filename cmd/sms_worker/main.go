@@ -31,12 +31,12 @@ func main() {
 		panic("failed to initialize logger: " + err.Error())
 	}
 	defer logr.Sync()
-cleanup := tracing.InitTracer("sms_worker",logr)
+	cleanup := tracing.InitTracer("sms_worker",logr)
 
 
 	defer cleanup()
-	dsn := os.Getenv("TENANT_DB")
-	notification_dns := os.Getenv("NOTIFICATION_DB")
+	dsn := os.Getenv("SIGNALBUS_DB")
+	notification_dns := os.Getenv("SIGNALBUS_DB")
 	tracer := otel.Tracer("notification_api")
 	db, err := database.InitDB(dsn)
 	if err != nil {
