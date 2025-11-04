@@ -246,3 +246,5 @@ V3 of Signalbus:
 
 I am planning to remove the multi-tenancy and all SaaS level features from the project.
 Because the project is turning into mess. So I want build a highly scalable notification system.
+
+- [] rate limiter for system after testing

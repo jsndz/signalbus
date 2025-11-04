@@ -17,12 +17,11 @@ func NewNotificationService(db *gorm.DB) *NotificationService {
 	return &NotificationService{repo: repositories.NewNotificationRepository(db)}
 }
 
-func (s *NotificationService) CreateNotification(tenantID uuid.UUID, topic, channel, userRef string) (uuid.UUID, error) {
+func (s *NotificationService) CreateNotification(topic, channel, userRef string) (uuid.UUID, error) {
 	if topic == "" {
 		return uuid.Nil, errors.New("notification topic cannot be empty")
 	}
 	notification := &models.Notification{
-		TenantID: tenantID,
 		Channel: channel,
 		Topic:    topic,
 		UserRef:  userRef,
@@ -50,6 +49,6 @@ func (s *NotificationService) UpdateStatus(id uuid.UUID, status string) error {
 	return s.repo.UpdateStatus(id, status)
 }
 
-func (s *NotificationService) DLQNotification(id uuid.UUID) (*models.DeliveryAttempt,uuid.UUID, error) {
+func (s *NotificationService) DLQNotification(id uuid.UUID) (*models.DeliveryAttempt, error) {
 	return s.repo.GetDLQByNotificationID(id)
 }

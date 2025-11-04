@@ -25,7 +25,6 @@ type KafkaStreamData struct {
 type GetTemplateData struct {
 	EventType string    `json:"event_type"`
 	Locale    string    `json:"locale"`
-	TenantID  uuid.UUID `json:"tenant_id"`
 }
 
 

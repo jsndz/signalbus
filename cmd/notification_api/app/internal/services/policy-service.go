@@ -17,10 +17,8 @@ func NewPolicyService(db *gorm.DB) *PolicyService {
 	return &PolicyService{repo: repositories.NewPolicyRepository(db)}
 }
 
-func (s *PolicyService) CreatePolicy(tenantID uuid.UUID, topic string, channels []string, locale string) (*models.Policy, error) {
-	if tenantID == uuid.Nil {
-		return nil, errors.New("tenant ID is required")
-	}
+func (s *PolicyService) CreatePolicy( topic string, channels []string, locale string) (*models.Policy, error) {
+	
 	if topic == "" {
 		return nil, errors.New("topic is required")
 	}
@@ -32,7 +30,6 @@ func (s *PolicyService) CreatePolicy(tenantID uuid.UUID, topic string, channels 
 	}
 
 	policy := &models.Policy{
-		TenantID: tenantID,
 		Topic:    topic,
 		Channels: channels,
 		Locale:   locale,
@@ -43,13 +40,10 @@ func (s *PolicyService) CreatePolicy(tenantID uuid.UUID, topic string, channels 
 	return policy, nil
 }
 
-func (s *PolicyService) GetPolicyByID(id uuid.UUID) (*models.Policy, error) {
-	return s.repo.GetByID(id)
+func (s *PolicyService) GetPolicyByTopic(topic string) (*models.Policy, error) {
+	return s.repo.GetByTopic(topic)
 }
 
-func (s *PolicyService) ListPolicies(tenantID uuid.UUID) ([]models.Policy, error) {
-	return s.repo.ListByTenant(tenantID)
-}
 
 func (s *PolicyService) DeletePolicy(id uuid.UUID) error {
 	return s.repo.Delete(id)

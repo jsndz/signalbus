@@ -87,7 +87,6 @@ func HandleSMS(
                 if msg.GetTemplateData != nil {
                     content, err := templates.Render(
                         msg.InTemplateData,
-                        msg.GetTemplateData.TenantID.String(),
                         "sms",  
                         msg.GetTemplateData.EventType,
                         msg.GetTemplateData.Locale,

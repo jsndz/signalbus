@@ -19,7 +19,6 @@ func NewPolicyHandler(db *gorm.DB) *PolicyHandler {
 
 func (h *PolicyHandler) CreatePolicy(c *gin.Context) {
 	var req struct {
-		TenantID string   `json:"tenant_id" binding:"required"`
 		Topic    string   `json:"topic" binding:"required"`
 		Channels []string `json:"channels" binding:"required"`
 		Locale   string   `json:"locale" binding:"required"`
@@ -29,13 +28,7 @@ func (h *PolicyHandler) CreatePolicy(c *gin.Context) {
 		return
 	}
 
-	tenantID, err := uuid.Parse(req.TenantID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tenant ID"})
-		return
-	}
-
-	policy, err := h.service.CreatePolicy(tenantID, req.Topic, req.Channels, req.Locale)
+	policy, err := h.service.CreatePolicy(req.Topic, req.Channels, req.Locale)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -43,21 +36,7 @@ func (h *PolicyHandler) CreatePolicy(c *gin.Context) {
 	c.JSON(http.StatusCreated, policy)
 }
 
-func (h *PolicyHandler) ListPolicies(c *gin.Context) {
-	tenantIDParam := c.Query("tenant_id")
-	tenantID, err := uuid.Parse(tenantIDParam)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tenant ID"})
-		return
-	}
 
-	policies, err := h.service.ListPolicies(tenantID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, policies)
-}
 
 func (h *PolicyHandler) DeletePolicy(c *gin.Context) {
 	idParam := c.Param("id")

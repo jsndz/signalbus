@@ -8,7 +8,6 @@ import (
 
 type Notification struct {
     ID        uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
-    TenantID  uuid.UUID `gorm:"type:uuid;not null;index"`
     Topic     string    `gorm:"size:100;not null;index"`
     Channel string `gorm:"size:100;not null;index"`
     UserRef   string    `gorm:"size:100;index"`

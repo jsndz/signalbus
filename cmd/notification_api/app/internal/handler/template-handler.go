@@ -50,22 +50,7 @@ func (h *TemplateHandler) GetTemplateByID(c *gin.Context) {
 	c.JSON(http.StatusOK, template)
 }
 
-func (h *TemplateHandler) ListTemplates(c *gin.Context) {
-	tenantIDParam := c.Query("tenant_id")
-	tenantID, err := uuid.Parse(tenantIDParam)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tenant ID"})
-		return
-	}
 
-	templates, err := h.service.ListTemplates(tenantID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, templates)
-}
 
 func (h *TemplateHandler) UpdateTemplate(c *gin.Context) {
 	idParam := c.Param("id")

@@ -6,26 +6,22 @@ import (
 	html "html/template"
 	text "text/template"
 
-	"github.com/google/uuid"
 	"github.com/jsndz/signalbus/pkg/repositories"
 )
 
 
 func Render(
     data map[string]interface{},
-    tenantID, channel, name, locale string,
+    channel, name, locale string,
     contentTypes []string,
     repo *repositories.TemplateRepository,
 ) (map[string][]byte, error) {
     results := make(map[string][]byte)
 
-    id, err := uuid.Parse(tenantID)
-    if err != nil {
-        return nil, fmt.Errorf("invalid tenantID: %w", err)
-    }
+
 
     for _, ct := range contentTypes {
-        tmpl, err := repo.GetByLookup(id, channel, name, locale, ct)
+        tmpl, err := repo.GetByLookup( channel, name, locale, ct)
         if err != nil {
             return nil, fmt.Errorf("failed to fetch template (%s): %w", ct, err)
         }

@@ -84,7 +84,7 @@ func HandleMail(broker string,
                  }   else {
                     content ,err := templates.Render(
                         msg.InTemplateData,
-                        msg.GetTemplateData.TenantID.String(),
+                        
                         "email",
                         msg.GetTemplateData.EventType,
                         msg.GetTemplateData.Locale,

@@ -39,23 +39,17 @@ func main() {
 	defer cleanup()
 	tracer := otel.Tracer("notification_api")
 	broker := utils.GetEnv("KAFKA_BROKER")
-	notification_dns := os.Getenv("SIGNALBUS_DB")
-	notification_db, err := database.InitDB(notification_dns)
-	if err != nil {
-		panic("DB not init  " + err.Error())
-	}
-	tenant_dns := os.Getenv("SIGNALBUS_DB")
-	tenant_db, err := database.InitDB(tenant_dns)
+
+	dns := os.Getenv("SIGNALBUS_DB")
+	db, err := database.InitDB(dns)
 	if err != nil {
 		panic("DB not init" + err.Error())
 	}
 	redis_dns := utils.GetEnv("REDIS_CLIENT")
 	redis := database.InitRedis(redis_dns)
-	template_dns := os.Getenv("SIGNALBUS_DB")
-	template_db, err := database.InitDB(template_dns)
-	database.MigrateDB(template_db, &models.Template{})
-	database.MigrateDB(notification_db, &models.Notification{}, &models.DeliveryAttempt{})
-	database.MigrateDB(tenant_db, &models.Tenant{}, &models.Policy{}, &models.APIKey{}, &models.IdempotencyKey{})
+	database.MigrateDB(db, &models.Template{})
+	database.MigrateDB(db, &models.Notification{}, &models.DeliveryAttempt{})
+	database.MigrateDB(db,  &models.Policy{},  &models.IdempotencyKey{})
 	if err != nil {
 		panic("DB not init  " + err.Error())
 	}
@@ -83,12 +77,10 @@ func main() {
 
 
 	v1 := router.Group("/api")
-	routes.Notifications(v1.Group("/notify"), producer, tenant_db, notification_db, redis, log, tracer)
-	routes.Tenants(v1.Group("/tenants"), tenant_db, log)
-	routes.APIKeys(v1.Group("/keys"), tenant_db, log)
-	routes.Policies(v1.Group("/policies"), tenant_db, log)
+	routes.Notifications(v1.Group("/notify"), producer, db, redis, log, tracer)
+	routes.Policies(v1.Group("/policies"), db, log)
 
-	routes.Templates(v1.Group("/templates"), template_db, log)
+	routes.Templates(v1.Group("/templates"), db, log)
 	go handleShutdown(producer, log)
 	if err := router.Run(":3000"); err != nil {
 		log.Fatal("Failed to start server", zap.Error(err))

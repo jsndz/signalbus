@@ -18,9 +18,7 @@ func NewTemplateService(db *gorm.DB) *TemplateService {
 }
 
 func (s *TemplateService) CreateTemplate(template *models.Template) error {
-	if template.TenantID == uuid.Nil {
-		return errors.New("tenant ID is required")
-	}
+	
 	if template.Name == "" {
 		return errors.New("template name is required")
 	}
@@ -48,24 +46,15 @@ func (s *TemplateService) GetTemplateByID(id uuid.UUID) (*models.Template, error
 	return s.repo.GetByID(id)
 }
 
-func (s *TemplateService) GetTemplateByName(tenantID uuid.UUID, name, locale string) (*models.Template, error) {
-	if tenantID == uuid.Nil {
-		return nil, errors.New("tenant ID is required")
-	}
+func (s *TemplateService) GetTemplateByName( name, locale string) (*models.Template, error) {
+
 	if name == "" {
 		return nil, errors.New("template name is required")
 	}
 	if locale == "" {
 		locale = "en-US"
 	}
-	return s.repo.GetByNameAndTenant(tenantID, name, locale)
-}
-
-func (s *TemplateService) ListTemplates(tenantID uuid.UUID) ([]models.Template, error) {
-	if tenantID == uuid.Nil {
-		return nil, errors.New("tenant ID is required")
-	}
-	return s.repo.List(tenantID)
+	return s.repo.GetByName(name, locale)
 }
 
 func (s *TemplateService) UpdateTemplate(template *models.Template) error {
@@ -82,15 +71,13 @@ func (s *TemplateService) DeleteTemplate(id uuid.UUID) error {
 	return s.repo.Delete(id)
 }
 
-func (s *TemplateService) LookupTemplate(tenantID uuid.UUID, channel, name, locale, contentType string) (*models.Template, error) {
-	if tenantID == uuid.Nil {
-		return nil, errors.New("tenant ID is required")
-	}
+func (s *TemplateService) LookupTemplate( channel, name, locale, contentType string) (*models.Template, error) {
+	
 	if channel == "" || name == "" || contentType == "" {
 		return nil, errors.New("channel, name and content type are required")
 	}
 	if locale == "" {
 		locale = "en-US"
 	}
-	return s.repo.GetByLookup(tenantID, channel, name, locale, contentType)
+	return s.repo.GetByLookup(channel, name, locale, contentType)
 }

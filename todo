@@ -1,4 +1,3 @@
-
 ## Phase 1 — Email foundations & `gomailer`
 
 **Learn**
@@ -307,5 +306,278 @@
 - [ ] Examples in Go/Node/TS.
 - [ ] README with diagram, quickstart, dashboards, and provider setup guides.
 - [ ] CONTRIBUTING.md, CODE_OF_CONDUCT.md, Apache-2.0 license.
+
+---
+
+# 🧠 Distributed Notification System — Master Roadmap (v2)
+
+### 🩵 Goal
+
+A **multi-channel, multi-tenant, Kafka-backed notification delivery platform** with strong reliability, observability, and real-world production patterns.
+
+---
+
+## ✅ Phase 1 — Email Foundations & `gomailer`
+
+**Learn**
+
+- SMTP handshake, TLS, app passwords, connection pools.
+- Compare API-based vs SMTP-based delivery for reliability & throughput.
+
+**Build**
+
+1. **`pkg/gomailer` Library**
+
+   - ✅ `Mailer` interface: `Send(ctx context.Context, Email) error`
+   - ✅ Models: `Email{From, To, Subject, Text, HTML, Attachments}`
+   - ✅ Drivers:
+
+     - SMTP driver (Mailpit + Gmail)
+     - Mailgun or SendGrid driver (configurable)
+
+   - ✅ Functional options: timeouts, headers, retry policies
+   - ✅ Context support + structured errors
+   - ✅ Unit tests with mocks/fakes; example app under `/examples/gomailer`
+   - 🔁 **TODO:** Add pooled connections & delivery metrics per provider
+
+2. **Email Worker**
+
+   - ✅ Kafka consumer group `notifications.email`
+   - ✅ Retries (exponential + jitter) + DLQ
+   - ✅ Prometheus metrics:
+
+     ```
+     notification_send_total{channel="email",provider,tenant,status}
+     notification_send_duration_seconds_bucket{channel="email",provider}
+     notification_retry_total{channel="email",reason}
+     ```
+
+   - ✅ JSON logs with correlation IDs (zap)
+   - 🔁 **TODO:** Batch processing + DLQ replay tool
+
+**Outcome:**
+`curl → API → Kafka → Email worker → Mailpit` works, Grafana shows throughput & latency.
+
+---
+
+## ✅ Phase 2 — SMS Foundations & `gosms`
+
+**Learn**
+
+- E.164 formatting, DLR (Delivery Receipts), idempotent provider calls.
+
+**Build**
+
+1. **`pkg/gosms`**
+
+   - ✅ Interface: `Send(ctx, to, body)`
+   - ✅ Drivers: Twilio + Vonage (configurable)
+   - ✅ Normalize & validate phone numbers (E.164)
+   - 🔁 **TODO:** Add provider HMAC validation for DLR webhooks
+
+2. **SMS Worker**
+
+   - ✅ Kafka group `notifications.sms`
+   - ✅ Retry + DLQ
+   - ✅ Per-tenant token bucket throttling
+   - 🔁 **TODO:** Implement DLR webhook → update delivery status in DB
+   - 🔁 **TODO:** End-to-end tests + provider sandbox verification
+
+**Outcome:**
+Full SMS pipeline operational with rate limiting & provider metrics.
+
+---
+
+## ✅ Phase 3 — Notification API (Publisher + Admin)
+
+**Learn**
+
+- REST API design, HMAC signing, OpenAPI docs, API key management.
+
+**Build**
+
+- ✅ `/publish/:topic` & `/notify` fan-out endpoints
+- ✅ API key auth & scopes
+- ✅ Rate limiting (short + long window)
+- ✅ Idempotency (Redis + Postgres unique index)
+- ✅ OpenAPI + Swagger UI
+- ✅ Idempotent Kafka producer keyed by user for order guarantees
+- 🔁 **TODO:** Add tenant-aware per-key quotas & analytics endpoint (`/usage`)
+
+**Outcome:**
+Single API call → fan-out across channels, fully deduplicated.
+
+---
+
+## ✅ Phase 4 — Persistence & Query Surface
+
+**Learn**
+
+- Schema design, partitioning, migrations, query performance.
+
+**Build**
+
+- ✅ Tables:
+
+  - `notifications`
+  - `delivery_attempts`
+  - `api_keys`
+  - `templates`
+
+- ✅ Repos + queries
+- 🔁 **TODO:** Migrations via `golang-migrate`
+- ✅ APIs:
+
+  - `GET /notifications/:id`
+  - `GET /notifications?...filters`
+  - `POST /notifications/:id/redrive`
+
+- 🔁 **TODO:** Index optimization & pagination cursor by `created_at`
+
+**Outcome:**
+You can browse & redrive failed notifications safely.
+
+---
+
+## ✅ Phase 5 — Templates, Localization & Preferences
+
+**Learn**
+
+- Templating engines, MJML, i18n patterns, user opt-out systems.
+
+**Build**
+
+- ✅ Template storage & Go `text/template` engine
+- 🔁 **TODO:** MJML-to-HTML pipeline for rich email templates
+- ✅ Localization field & language selection
+- 🔁 **TODO:** User opt-out & quiet-hours (DND windows, timezone-aware)
+- ✅ Policy engine (topic → channels respecting prefs)
+
+**Outcome:**
+Per-tenant custom templates + localized rendering.
+
+---
+
+## ✅ Phase 6 — Observability & Tracing
+
+**Learn**
+
+- RED/USE metrics, OTel tracing, Grafana dashboards.
+
+**Build**
+
+- ✅ Standard metrics across all services:
+
+  - `http_requests_total`
+  - `kafka_consumer_lag`
+  - `notification_*`
+
+- ✅ OpenTelemetry tracing:
+
+  - Span chain: API → Kafka → Worker → Provider
+
+- ✅ Grafana dashboards (API, channel latency, Kafka lag)
+- ✅ Alerting rules (lag, failure rate)
+- 🔁 **TODO:** Tempo/Jaeger full-trace visualization polish
+
+**Outcome:**
+You can trace a notification’s full journey in Grafana/Jaeger.
+
+---
+
+## ✅ Phase 7 — Multi-Tenant & Quotas
+
+**Learn**
+
+- Tenant isolation, rate limiting, quotas, and billing.
+
+**Build**
+
+- ✅ Tenant scoping everywhere
+- ✅ Per-tenant rate limiters
+- 🔁 **TODO:** API key rotation endpoints
+- 🔁 **TODO:** Usage metrics (`tenant_usage_total{tenant,channel}`)
+- 🔁 **TODO:** Optional row-level security enforcement (Postgres RLS)
+
+**Outcome:**
+Safe, isolated tenants — SaaS-ready.
+
+---
+
+## 🔁 Phase 8 — Push & Chat Channels
+
+**Learn**
+
+- FCM, APNs, Web Push VAPID, Slack webhooks.
+
+**Build**
+
+- 🔁 `gopush` interface → drivers (FCM → APNs → Web Push)
+- 🔁 Push worker (`notifications.push`)
+- 🔁 Slack worker (`notifications.slack`)
+- 🔁 Device token registry with expiry + cleanup cron
+
+**Outcome:**
+Unified delivery: email + SMS + push + Slack.
+
+---
+
+## 🔁 Phase 9 — Reliability & Ops
+
+**Learn**
+
+- Kafka transactions, replay/redrive semantics, idempotency compaction.
+
+**Build**
+
+- 🔁 Replay tool (by time or filters)
+- 🔁 DLQ redrive with re-templating
+- 🔁 Topic compaction for idempotency keys
+- 🔁 KEDA autoscaling on lag
+- 🔁 Alerting for consumer lag & failures
+
+**Outcome:**
+Battle-tested reliability and scalability under load.
+
+---
+
+## 🔁 Phase 10 — Packaging, Deployment, Docs
+
+**Learn**
+
+- Helm charts, security, container hardening, CI/CD pipelines.
+
+**Build**
+
+- 🔁 Distroless images, non-root users
+- 🔁 Helm chart with provider configs & secrets
+- 🔁 GitHub Actions pipeline:
+
+  - Lint → Test → Build → SBOM → Scan → Push → Publish chart
+
+- 🔁 `/examples` in Go + Node.js showing notification publish flow
+- 🔁 Full README:
+
+  - Architecture diagram
+  - Quickstart (docker-compose)
+  - Grafana dashboards
+  - Provider setup guide
+
+- 🔁 CONTRIBUTING.md, CODE_OF_CONDUCT.md, Apache-2.0 license
+
+**Outcome:**
+One-line deploy. Anyone can clone → run → send notifications in minutes.
+
+---
+
+## 🧩 Bonus (Optional Extensions)
+
+| Extension                 | Description                                       |
+| ------------------------- | ------------------------------------------------- |
+| **Exactly-once delivery** | Kafka transactional producer + dedup store        |
+| **Dynamic routing rules** | Tenants can define routing policies via config    |
+| **Webhook notifications** | Third-party endpoints as channels                 |
+| **Load tests**            | k6 or Vegeta benchmarks up to 50k events/sec      |
+| **Chaos testing**         | Kill workers randomly, ensure redrive correctness |
 
 ---

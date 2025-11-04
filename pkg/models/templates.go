@@ -8,7 +8,6 @@ import (
 
 type Template struct {
 	ID          uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
-	TenantID    uuid.UUID `gorm:"type:uuid;not null;index"`
 	Name        string    `gorm:"size:100;not null"`
 	Channel     string    `gorm:"type:varchar(20);not null"`
 	ContentType string    `gorm:"type:varchar(20);not null"`

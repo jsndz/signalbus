@@ -9,7 +9,6 @@ import (
 )
 type NotifyRequest struct {
     EventType      string                 `json:"event_type" binding:"required"`
-	ApiKey			string					`json:"api_key" binding:"required"`
     Data           map[string]interface{} `json:"data" binding:"required"`
     IdempotencyKey string                 `json:"idempotency_key" binding:"required"`
 }
@@ -30,27 +29,23 @@ func NewRateLimiter(r rate.Limit, burst int) *RateLimiter {
 	}
 }
 
-func (rl *RateLimiter) getLimiter(apiKey string) *rate.Limiter {
+func (rl *RateLimiter) getLimiter(key string) *rate.Limiter {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
-	limiter, exists := rl.limiters[apiKey]
+	limiter, exists := rl.limiters[key]
 	if !exists {
 		limiter = rate.NewLimiter(rl.r, rl.burst)
-		rl.limiters[apiKey] = limiter
+		rl.limiters[key] = limiter
 	}
 	return limiter
 }
 
-func (rl *RateLimiter) Middleware() gin.HandlerFunc {
+func (rl *RateLimiter) Middleware(key string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		apiKey := c.GetHeader("X-API-Key")
-		if apiKey == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing API key"})
-			return
-		}
+		
 
-		limiter := rl.getLimiter(apiKey)
+		limiter := rl.getLimiter(key)
 		if !limiter.Allow() {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"error": "rate limit exceeded, slow down",
