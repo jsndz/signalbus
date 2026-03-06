@@ -1,7 +1,4 @@
-Good — this is exactly the **multi-tenant dynamic provider selection** pattern.
-Let’s break it down like a strict teacher 👨‍🏫 — no code, only _steps_.
 
----
 
 ## 🧩 Step 1. Define what you need per tenant
 
